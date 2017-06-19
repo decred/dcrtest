@@ -1,4 +1,5 @@
 // Copyright (c) 2016 The btcsuite developers
+// Copyright (c) 2017 The Decred developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
@@ -10,7 +11,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/btcsuite/btcrpcclient"
+	"github.com/decred/dcrd/dcrjson"
+	"github.com/decred/dcrrpcclient"
 )
 
 // JoinType is an enum representing a particular type of "node join". A node
@@ -50,7 +52,7 @@ func syncMempools(nodes []*Harness) error {
 
 	for !poolsMatch {
 	retry:
-		firstPool, err := nodes[0].Node.GetRawMempool()
+		firstPool, err := nodes[0].Node.GetRawMempool(dcrjson.GRMAll)
 		if err != nil {
 			return err
 		}
@@ -59,7 +61,7 @@ func syncMempools(nodes []*Harness) error {
 		// first node, then we're done. Otherwise, drop back to the top
 		// of the loop and retry after a short wait period.
 		for _, node := range nodes[:1] {
-			nodePool, err := node.Node.GetRawMempool()
+			nodePool, err := node.Node.GetRawMempool(dcrjson.GRMAll)
 			if err != nil {
 				return err
 			}
@@ -120,7 +122,7 @@ func ConnectNode(from *Harness, to *Harness) error {
 	}
 	numPeers := len(peerInfo)
 
-	if err := from.Node.AddNode(targetAddr, btcrpcclient.ANAdd); err != nil {
+	if err := from.Node.AddNode(targetAddr, dcrrpcclient.ANAdd); err != nil {
 		return err
 	}
 

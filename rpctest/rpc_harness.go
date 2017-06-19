@@ -1,4 +1,5 @@
 // Copyright (c) 2016 The btcsuite developers
+// Copyright (c) 2017 The Decred developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
@@ -15,11 +16,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/btcsuite/btcd/chaincfg"
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
-	"github.com/btcsuite/btcd/wire"
-	"github.com/btcsuite/btcrpcclient"
-	"github.com/btcsuite/btcutil"
+	"github.com/decred/dcrd/chaincfg"
+	"github.com/decred/dcrd/chaincfg/chainhash"
+	"github.com/decred/dcrd/wire"
+	"github.com/decred/dcrrpcclient"
+	"github.com/decred/dcrutil"
 )
 
 var (
@@ -31,14 +32,14 @@ var (
 	// connections.  Subsequent allocated ports for future rpc harness
 	// instances will be monotonically increasing odd numbers calculated as
 	// such: defaultP2pPort + (2 * harness.nodeNum).
-	defaultP2pPort = 18555
+	defaultP2pPort = 19555
 
 	// defaultRPCPort is the initial rpc port which will be used by the
 	// first created rpc harnesses to listen on for incoming rpc
 	// connections. Subsequent allocated ports for future rpc harness
 	// instances will be monotonically increasing even numbers calculated
 	// as such: defaultP2pPort + (2 * harness.nodeNum).
-	defaultRPCPort = 18556
+	defaultRPCPort = 18956
 
 	// testInstances is a private package-level slice used to keep track of
 	// all active test harnesses. This global can be used to perform
@@ -50,14 +51,20 @@ var (
 	harnessStateMtx sync.RWMutex
 )
 
+const (
+	// BlockVersion is the default block version used when generating
+	// blocks.
+	BlockVersion = 3
+)
+
 // HarnessTestCase represents a test-case which utilizes an instance of the
 // Harness to exercise functionality.
 type HarnessTestCase func(r *Harness, t *testing.T)
 
-// Harness fully encapsulates an active btcd process to provide a unified
-// platform for creating rpc driven integration tests involving btcd. The
-// active btcd node will typically be run in simnet mode in order to allow for
-// easy generation of test blockchains.  The active btcd process is fully
+// Harness fully encapsulates an active dcrd process to provide a unified
+// platform for creating rpc driven integration tests involving dcrd. The
+// active dcrd node will typically be run in simnet mode in order to allow for
+// easy generation of test blockchains.  The active dcrd process is fully
 // managed by Harness, which handles the necessary initialization, and teardown
 // of the process along with any temporary directories created as a result.
 // Multiple Harness instances may be run concurrently, in order to allow for
@@ -68,9 +75,9 @@ type Harness struct {
 	// to.
 	ActiveNet *chaincfg.Params
 
-	Node     *btcrpcclient.Client
+	Node     *dcrrpcclient.Client
 	node     *node
-	handlers *btcrpcclient.NotificationHandlers
+	handlers *dcrrpcclient.NotificationHandlers
 
 	wallet *memWallet
 
@@ -87,9 +94,7 @@ type Harness struct {
 // used.
 //
 // NOTE: This function is safe for concurrent access.
-func New(activeNet *chaincfg.Params, handlers *btcrpcclient.NotificationHandlers,
-	extraArgs []string) (*Harness, error) {
-
+func New(activeNet *chaincfg.Params, handlers *dcrrpcclient.NotificationHandlers, extraArgs []string) (*Harness, error) {
 	harnessStateMtx.Lock()
 	defer harnessStateMtx.Unlock()
 
@@ -131,7 +136,7 @@ func New(activeNet *chaincfg.Params, handlers *btcrpcclient.NotificationHandlers
 	numTestInstances++
 
 	if handlers == nil {
-		handlers = &btcrpcclient.NotificationHandlers{}
+		handlers = &dcrrpcclient.NotificationHandlers{}
 	}
 
 	// If a handler for the OnBlockConnected/OnBlockDisconnected callback
@@ -140,19 +145,19 @@ func New(activeNet *chaincfg.Params, handlers *btcrpcclient.NotificationHandlers
 	// wallet's callback.
 	if handlers.OnBlockConnected != nil {
 		obc := handlers.OnBlockConnected
-		handlers.OnBlockConnected = func(hash *chainhash.Hash, height int32, t time.Time) {
-			wallet.IngestBlock(hash, height, t)
-			obc(hash, height, t)
+		handlers.OnBlockConnected = func(header []byte, filteredTxns [][]byte) {
+			wallet.IngestBlock(header, filteredTxns)
+			obc(header, filteredTxns)
 		}
 	} else {
 		// Otherwise, we can claim the callback ourselves.
 		handlers.OnBlockConnected = wallet.IngestBlock
 	}
 	if handlers.OnBlockDisconnected != nil {
-		obd := handlers.OnBlockConnected
-		handlers.OnBlockDisconnected = func(hash *chainhash.Hash, height int32, t time.Time) {
-			wallet.UnwindBlock(hash, height, t)
-			obd(hash, height, t)
+		obd := handlers.OnBlockDisconnected
+		handlers.OnBlockDisconnected = func(header []byte) {
+			wallet.UnwindBlock(header)
+			obd(header)
 		}
 	} else {
 		handlers.OnBlockDisconnected = wallet.UnwindBlock
@@ -183,7 +188,7 @@ func New(activeNet *chaincfg.Params, handlers *btcrpcclient.NotificationHandlers
 // NOTE: This method and TearDown should always be called from the same
 // goroutine as they are not concurrent safe.
 func (h *Harness) SetUp(createTestChain bool, numMatureOutputs uint32) error {
-	// Start the btcd node itself. This spawns a new process which will be
+	// Start the dcrd node itself. This spawns a new process which will be
 	// managed
 	if err := h.node.start(); err != nil {
 		return err
@@ -194,8 +199,15 @@ func (h *Harness) SetUp(createTestChain bool, numMatureOutputs uint32) error {
 
 	h.wallet.Start()
 
-	// Ensure the btcd properly dispatches our registered call-back for
-	// each new block. Otherwise, the memWallet won't function properly.
+	// Filter transactions that pay to the coinbase associated with the
+	// wallet.
+	filterAddrs := []dcrutil.Address{h.wallet.coinbaseAddr}
+	if err := h.Node.LoadTxFilter(true, filterAddrs, nil); err != nil {
+		return err
+	}
+
+	// Ensure dcrd properly dispatches our registered call-back for each new
+	// block. Otherwise, the memWallet won't function properly.
 	if err := h.Node.NotifyBlocks(); err != nil {
 		return err
 	}
@@ -203,8 +215,9 @@ func (h *Harness) SetUp(createTestChain bool, numMatureOutputs uint32) error {
 	// Create a test chain with the desired number of mature coinbase
 	// outputs.
 	if createTestChain && numMatureOutputs != 0 {
+		// Include an extra block to account for the premine block.
 		numToGenerate := (uint32(h.ActiveNet.CoinbaseMaturity) +
-			numMatureOutputs)
+			numMatureOutputs) + 1
 		_, err := h.Node.Generate(numToGenerate)
 		if err != nil {
 			return err
@@ -255,19 +268,19 @@ func (h *Harness) TearDown() error {
 	return nil
 }
 
-// connectRPCClient attempts to establish an RPC connection to the created btcd
+// connectRPCClient attempts to establish an RPC connection to the created dcrd
 // process belonging to this Harness instance. If the initial connection
 // attempt fails, this function will retry h.maxConnRetries times, backing off
 // the time between subsequent attempts. If after h.maxConnRetries attempts,
 // we're not able to establish a connection, this function returns with an
 // error.
 func (h *Harness) connectRPCClient() error {
-	var client *btcrpcclient.Client
+	var client *dcrrpcclient.Client
 	var err error
 
 	rpcConf := h.node.config.rpcConnConfig()
 	for i := 0; i < h.maxConnRetries; i++ {
-		if client, err = btcrpcclient.New(&rpcConf, h.handlers); err != nil {
+		if client, err = dcrrpcclient.New(&rpcConf, h.handlers); err != nil {
 			time.Sleep(time.Duration(i) * 50 * time.Millisecond)
 			continue
 		}
@@ -287,7 +300,7 @@ func (h *Harness) connectRPCClient() error {
 // wallet.
 //
 // This function is safe for concurrent access.
-func (h *Harness) NewAddress() (btcutil.Address, error) {
+func (h *Harness) NewAddress() (dcrutil.Address, error) {
 	return h.wallet.NewAddress()
 }
 
@@ -295,7 +308,7 @@ func (h *Harness) NewAddress() (btcutil.Address, error) {
 // wallet.
 //
 // This function is safe for concurrent access.
-func (h *Harness) ConfirmedBalance() btcutil.Amount {
+func (h *Harness) ConfirmedBalance() dcrutil.Amount {
 	return h.wallet.ConfirmedBalance()
 }
 
@@ -304,15 +317,13 @@ func (h *Harness) ConfirmedBalance() btcutil.Amount {
 // according to targetOutputs.
 //
 // This function is safe for concurrent access.
-func (h *Harness) SendOutputs(targetOutputs []*wire.TxOut,
-	feeRate btcutil.Amount) (*chainhash.Hash, error) {
-
+func (h *Harness) SendOutputs(targetOutputs []*wire.TxOut, feeRate dcrutil.Amount) (*chainhash.Hash, error) {
 	return h.wallet.SendOutputs(targetOutputs, feeRate)
 }
 
 // CreateTransaction returns a fully signed transaction paying to the specified
 // outputs while observing the desired fee rate. The passed fee rate should be
-// expressed in satoshis-per-byte. Any unspent outputs selected as inputs for
+// expressed in atoms-per-byte. Any unspent outputs selected as inputs for
 // the crafted transaction are marked as unspendable in order to avoid
 // potential double-spends by future calls to this method. If the created
 // transaction is cancelled for any reason then the selected inputs MUST be
@@ -320,9 +331,7 @@ func (h *Harness) SendOutputs(targetOutputs []*wire.TxOut,
 // returned to the pool of spendable outputs.
 //
 // This function is safe for concurrent access.
-func (h *Harness) CreateTransaction(targetOutputs []*wire.TxOut,
-	feeRate btcutil.Amount) (*wire.MsgTx, error) {
-
+func (h *Harness) CreateTransaction(targetOutputs []*wire.TxOut, feeRate dcrutil.Amount) (*wire.MsgTx, error) {
 	return h.wallet.CreateTransaction(targetOutputs, feeRate)
 }
 
@@ -338,52 +347,8 @@ func (h *Harness) UnlockOutputs(inputs []*wire.TxIn) {
 // RPCConfig returns the harnesses current rpc configuration. This allows other
 // potential RPC clients created within tests to connect to a given test
 // harness instance.
-func (h *Harness) RPCConfig() btcrpcclient.ConnConfig {
+func (h *Harness) RPCConfig() dcrrpcclient.ConnConfig {
 	return h.node.config.rpcConnConfig()
-}
-
-// GenerateAndSubmitBlock creates a block whose contents include the passed
-// transactions and submits it to the running simnet node. For generating
-// blocks with only a coinbase tx, callers can simply pass nil instead of
-// transactions to be mined. Additionally, a custom block version can be set by
-// the caller. A blockVersion of -1 indicates that the current default block
-// version should be used. An uninitialized time.Time should be used for the
-// blockTime parameter if one doesn't wish to set a custom time.
-//
-// This function is safe for concurrent access.
-func (h *Harness) GenerateAndSubmitBlock(txns []*btcutil.Tx, blockVersion int32,
-	blockTime time.Time) (*btcutil.Block, error) {
-
-	h.Lock()
-	defer h.Unlock()
-
-	if blockVersion == -1 {
-		blockVersion = wire.BlockVersion
-	}
-
-	prevBlockHash, prevBlockHeight, err := h.Node.GetBestBlock()
-	if err != nil {
-		return nil, err
-	}
-	prevBlock, err := h.Node.GetBlock(prevBlockHash)
-	if err != nil {
-		return nil, err
-	}
-	prevBlock.SetHeight(prevBlockHeight)
-
-	// Create a new block including the specified transactions
-	newBlock, err := createBlock(prevBlock, txns, blockVersion,
-		blockTime, h.wallet.coinbaseAddr, h.ActiveNet)
-	if err != nil {
-		return nil, err
-	}
-
-	// Submit the block to the simnet node.
-	if err := h.Node.SubmitBlock(newBlock, nil); err != nil {
-		return nil, err
-	}
-
-	return newBlock, nil
 }
 
 // generateListeningAddresses returns two strings representing listening
