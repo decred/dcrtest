@@ -2,10 +2,6 @@
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
-// This file is ignored during the regular tests due to the following build tag.
-//go:build rpctest
-// +build rpctest
-
 package rpctest
 
 import (
