@@ -3,10 +3,6 @@
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
-// This file is ignored during the regular tests due to the following build tag.
-//go:build rpctest
-// +build rpctest
-
 package rpctest
 
 import (
@@ -42,7 +38,7 @@ func testSendOutputs(ctx context.Context, r *Harness, t *testing.T) {
 		// mature coinbase outputs.
 		addrScriptVer, addrScript := addr.PaymentScript()
 		output := newTxOut(int64(amt), addrScriptVer, addrScript)
-		txid, err := r.SendOutputs(ctx, []*wire.TxOut{output}, 10)
+		txid, err := r.SendOutputs(ctx, []*wire.TxOut{output}, 10000)
 		if err != nil {
 			t.Fatalf("coinbase spend failed: %v", err)
 		}
@@ -396,7 +392,7 @@ func testJoinMempools(ctx context.Context, r *Harness, t *testing.T) {
 		t.Fatalf("unable to generate pkscript to addr: %v", err)
 	}
 	output := newTxOut(5e8, addrScriptVer, addrScript)
-	testTx, err := r.CreateTransaction(ctx, []*wire.TxOut{output}, 10)
+	testTx, err := r.CreateTransaction(ctx, []*wire.TxOut{output}, 10000)
 	if err != nil {
 		t.Fatalf("coinbase spend failed: %v", err)
 	}
