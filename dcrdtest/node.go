@@ -188,34 +188,6 @@ func (n *node) tracef(format string, args ...interface{}) {
 	tracef(n.t, pid+format, args...)
 }
 
-// buildNode creates a new temporary directory and node and saves the location
-// to a package level variable where it is used for all tests. pathToDCRDMtx
-// must be held for writes.
-func buildNode(t *testing.T) error {
-	testNodeDir, err := os.MkdirTemp("", "rpctestdcrdnode")
-	if err != nil {
-		return err
-	}
-	pathToDCRD = filepath.Join(testNodeDir, "dcrd")
-	if runtime.GOOS == "windows" {
-		pathToDCRD += ".exe"
-	}
-	debugf(t, "test node located at: %v\n", pathToDCRD)
-	// Determine import path of this package.
-	_, rpctestDir, _, ok := runtime.Caller(1)
-	if !ok {
-		return fmt.Errorf("cannot get path to dcrd source code")
-	}
-	dcrdPkgPath := filepath.Join(rpctestDir, "..", "..")
-	// Build dcrd and output an executable in a static temp path.
-	cmd := exec.Command("go", "build", "-o", pathToDCRD, dcrdPkgPath)
-	err = cmd.Run()
-	if err != nil {
-		return fmt.Errorf("failed to build dcrd: %v", err)
-	}
-	return nil
-}
-
 // newNode creates a new node instance according to the passed config. dataDir
 // will be used to hold a file recording the pid of the launched process, and
 // as the base for the log and data directories for dcrd. If pathToDCRD has a
@@ -224,9 +196,9 @@ func newNode(t *testing.T, config *nodeConfig, dataDir string) (*node, error) {
 	// Create the dcrd node used for tests if not created yet.
 	pathToDCRDMtx.Lock()
 	if pathToDCRD == "" {
-		if err := buildNode(t); err != nil {
-			pathToDCRDMtx.Unlock()
-			return nil, err
+		pathToDCRD = "dcrd"
+		if runtime.GOOS == "windows" {
+			pathToDCRD += ".exe"
 		}
 	}
 	config.pathToDCRD = pathToDCRD
