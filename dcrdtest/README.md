@@ -22,7 +22,6 @@ systems/integration tests.
 
 ## License
 
-
 Package dcrdtest is licensed under the [copyfree](http://copyfree.org) ISC
 License.
 
