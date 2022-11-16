@@ -196,3 +196,11 @@ func AdjustedSimnetMiner(ctx context.Context, client *rpcclient.Client, nb uint3
 
 	return hashes, nil
 }
+
+// AdjustedSimnetMinerForClient returns a miner function that closes over the
+// passed rpclient to use the adjusted simnet miner to generate blocks.
+func AdjustedSimnetMinerForClient(c *rpcclient.Client) func(ctx context.Context, nb uint32) ([]*chainhash.Hash, error) {
+	return func(ctx context.Context, nb uint32) ([]*chainhash.Hash, error) {
+		return AdjustedSimnetMiner(ctx, c, nb)
+	}
+}

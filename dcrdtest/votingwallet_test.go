@@ -63,6 +63,7 @@ func TestMinimalVotingWallet(t *testing.T) {
 	logDir := "./dcrdlogs"
 	extraArgs := []string{
 		"--debuglevel=debug",
+		"--logdir=" + logDir,
 	}
 
 	info, err := os.Stat(logDir)
@@ -87,11 +88,15 @@ func TestMinimalVotingWallet(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	err = hn.SetUp(ctx, true, 8)
+	err = hn.SetUp(ctx, false, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer hn.TearDown()
+
+	if _, err := AdjustedSimnetMiner(ctx, hn.Node, 64); err != nil {
+		t.Fatal(err)
+	}
 
 	type testCase struct {
 		name string
@@ -112,6 +117,8 @@ func TestMinimalVotingWallet(t *testing.T) {
 			if err != nil {
 				t1.Fatalf("unable to create voting wallet for test: %v", err)
 			}
+
+			vw.SetMiner(AdjustedSimnetMinerForClient(hn.Node))
 
 			err = vw.Start(ctx)
 			if err != nil {
