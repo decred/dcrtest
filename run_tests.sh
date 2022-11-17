@@ -18,25 +18,35 @@ set -e
 
 go version
 
-# run tests on all modules
-ROOTPATH=$(go list -m)
-ROOTPATHPATTERN=$(echo $ROOTPATH | sed 's/\\/\\\\/g' | sed 's/\//\\\//g')
-MODPATHS=$(go list -m all | grep "^$ROOTPATHPATTERN" | sort | uniq | cut -d' ' -f1)
+# Use dcrtest.work as the Go workspace if one has not been specified.
+GOWORK=$(go env GOWORK)
+if [ -z "$GOWORK" ]; then
+  GOWORK="$PWD/dcrtest.work"
+fi
+echo "GOWORK: $GOWORK"
+
+# Root module name to determine which submodules to test. This is needed because
+# the top-level dir is not a Go module.
+ROOTMOD="github.com/decred/dcrtest"
+
+# Run tests on all modules.
+ROOTPATHPATTERN=$(echo $ROOTMOD | sed 's/\\/\\\\/g' | sed 's/\//\\\//g')
+MODPATHS=$(GOWORK=$GOWORK go list -m all | grep "^$ROOTPATHPATTERN" | sort | uniq | cut -d' ' -f1)
 for module in $MODPATHS; do
-  # check linters
+  # Determine subdir name based on module name.
   MODNAME=$(echo $module | sed -E -e "s/^$ROOTPATHPATTERN//" \
     -e 's,^/,,' -e 's,/v[0-9]+$,,')
   if [ -z "$MODNAME" ]; then
-    MODNAME=.
+    # Root dir is not a module.
+    continue
   fi
 
-  # run commands in the module directory as a subshell
+  # Test and lint submodule in a subshell.
   (
     cd $MODNAME
 
-    go test ./...
+    GOWORK="$GOWORK" go test ./...
 
-    # run linters
     golangci-lint run --disable-all --deadline=10m \
       --enable=gofmt \
       --enable=gosimple \
