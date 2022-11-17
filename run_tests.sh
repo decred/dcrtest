@@ -37,7 +37,7 @@ for module in $MODPATHS; do
     go test ./...
 
     # run linters
-    golangci-lint run --build-tags=rpctest --disable-all --deadline=10m \
+    golangci-lint run --disable-all --deadline=10m \
       --enable=gofmt \
       --enable=gosimple \
       --enable=unconvert \

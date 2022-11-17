@@ -3,7 +3,7 @@
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
-package rpctest
+package dcrdtest
 
 import (
 	"context"
@@ -134,7 +134,7 @@ func testConnectNode(ctx context.Context, r *Harness, t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := harness.SetUp(ctx, false, 0); err != nil {
-		t.Fatalf("unable to complete rpctest setup: %v", err)
+		t.Fatalf("unable to complete harness setup: %v", err)
 	}
 	defer func() {
 		tracef(t, "testConnectNode: calling harness.TearDown")
@@ -185,7 +185,7 @@ func testDisconnectNode(ctx context.Context, r *Harness, t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := harness.SetUp(ctx, false, 0); err != nil {
-		t.Fatalf("unable to complete rpctest setup: %v", err)
+		t.Fatalf("unable to complete harness setup: %v", err)
 	}
 	defer harness.TearDown()
 
@@ -235,7 +235,7 @@ func testNodesConnected(ctx context.Context, r *Harness, t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := harness.SetUp(ctx, false, 0); err != nil {
-		t.Fatalf("unable to complete rpctest setup: %v", err)
+		t.Fatalf("unable to complete harness setup: %v", err)
 	}
 	defer harness.TearDown()
 
@@ -369,7 +369,7 @@ func testJoinMempools(ctx context.Context, r *Harness, t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := harness.SetUp(ctx, false, 0); err != nil {
-		t.Fatalf("unable to complete rpctest setup: %v", err)
+		t.Fatalf("unable to complete harness setup: %v", err)
 	}
 	defer harness.TearDown()
 
@@ -488,7 +488,7 @@ func testJoinBlocks(ctx context.Context, r *Harness, t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := harness.SetUp(ctx, false, 0); err != nil {
-		t.Fatalf("unable to complete rpctest setup: %v", err)
+		t.Fatalf("unable to complete harness setup: %v", err)
 	}
 	defer harness.TearDown()
 
@@ -544,7 +544,7 @@ func testMemWalletReorg(ctx context.Context, r *Harness, t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := harness.SetUp(ctx, true, 5); err != nil {
-		t.Fatalf("unable to complete rpctest setup: %v", err)
+		t.Fatalf("unable to complete harness setup: %v", err)
 	}
 	defer harness.TearDown()
 

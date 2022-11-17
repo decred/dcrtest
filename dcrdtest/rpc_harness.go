@@ -3,7 +3,7 @@
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
-package rpctest
+package dcrdtest
 
 import (
 	"context"
@@ -117,15 +117,14 @@ func SetPathToDCRD(fnScopePathToDCRD string) {
 // New creates and initializes new instance of the rpc test harness.
 // Optionally, websocket handlers and a specified configuration may be passed.
 // In the case that a nil config is passed, a default configuration will be
-// used. If pathToDCRD has not been set and working within the dcrd repository,
-// a dcrd executable created from the directory at rpctest/../ (dcrd repo's
-// root directory) will be created in a temporary directory. pathToDCRD will be
-// set as that file's location. If pathToDCRD has already been set, the
-// executable at that location will be used.
+// used. If pathToDCRD has not been set, then an appropriate version of the
+// dcrd binary must exist in the current PATH environment variable. If
+// pathToDCRD has already been set, the executable at that location will be
+// used.
 //
 // NOTE: This function is safe for concurrent access, but care must be taken
 // when calling New with different dcrd executables, as whatever is at
-// pathToDCRD at the time will be identified with that node.
+// pathToDCRD at the time will be used to launch that node.
 func New(t *testing.T, activeNet *chaincfg.Params, handlers *rpcclient.NotificationHandlers, extraArgs []string) (*Harness, error) {
 	harnessStateMtx.Lock()
 	defer harnessStateMtx.Unlock()
@@ -142,12 +141,12 @@ func New(t *testing.T, activeNet *chaincfg.Params, handlers *rpcclient.Notificat
 	case wire.RegNet:
 		extraArgs = append(extraArgs, "--regnet")
 	default:
-		return nil, fmt.Errorf("rpctest.New must be called with one " +
+		return nil, fmt.Errorf("dcrdtest.New must be called with one " +
 			"of the supported chain networks")
 	}
 
 	harnessID := strconv.Itoa(numTestInstances)
-	nodeTestData, err := os.MkdirTemp("", "rpctest-"+harnessID)
+	nodeTestData, err := os.MkdirTemp("", "dcrdtest-"+harnessID)
 	if err != nil {
 		return nil, err
 	}
