@@ -8,9 +8,6 @@ package dcrdtest
 import (
 	"context"
 	"reflect"
-	"runtime"
-	"syscall"
-	"testing"
 	"time"
 
 	dcrdtypes "github.com/decred/dcrd/rpc/jsonrpc/types/v4"
@@ -211,59 +208,4 @@ func NodesConnected(ctx context.Context, from, to *Harness, allowReverse bool) (
 	}
 
 	return false, nil
-}
-
-// TearDownAll tears down all active test harnesses.
-// XXX harness.TearDown() can hang with mutex held.
-func TearDownAll() error {
-	harnessStateMtx.Lock()
-	defer harnessStateMtx.Unlock()
-
-	for _, harness := range testInstances {
-		if err := harness.TearDown(); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-// ActiveHarnesses returns a slice of all currently active test harnesses. A
-// test harness if considered "active" if it has been created, but not yet torn
-// down.
-// XXX this is dumb because whatever happens after this call is racing over the
-// Harness pointers.
-func ActiveHarnesses() []*Harness {
-	harnessStateMtx.RLock()
-	defer harnessStateMtx.RUnlock()
-
-	activeNodes := make([]*Harness, 0, len(testInstances))
-	for _, harness := range testInstances {
-		activeNodes = append(activeNodes, harness)
-	}
-
-	return activeNodes
-}
-
-// PanicAll tears down all active test harnesses.
-// XXX We ignore the mutex because it is *hopefully* locked when this is
-// called.
-func PanicAll(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Logf("sigabort not supported")
-		return
-	}
-
-	for _, harness := range testInstances {
-		// This is a little wonky but works.
-		t.Logf("========================================================")
-		t.Logf("Aborting: %v", harness.node.pid)
-		err := harness.node.cmd.Process.Signal(syscall.SIGABRT)
-		if err != nil {
-			t.Logf("abort: %v", err)
-		}
-
-		// Allows for process to dump
-		time.Sleep(2 * time.Second)
-	}
 }

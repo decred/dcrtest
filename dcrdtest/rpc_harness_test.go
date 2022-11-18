@@ -8,7 +8,6 @@ package dcrdtest
 import (
 	"context"
 	"fmt"
-	"os"
 	"testing"
 	"time"
 
@@ -294,57 +293,6 @@ func testNodesConnected(ctx context.Context, r *Harness, t *testing.T) {
 			t.Fatalf("test case %s: nodes connected after commanded to "+
 				"disconnect", tc.name)
 		}
-	}
-}
-
-func testTearDownAll(t *testing.T) {
-	tracef(t, "testTearDownAll start")
-	defer tracef(t, "testTearDownAll end")
-
-	// Grab a local copy of the currently active harnesses before
-	// attempting to tear them all down.
-	initialActiveHarnesses := ActiveHarnesses()
-
-	// Tear down all currently active harnesses.
-	if err := TearDownAll(); err != nil {
-		t.Fatalf("unable to teardown all harnesses: %v", err)
-	}
-
-	// The global testInstances map should now be fully purged with no
-	// active test harnesses remaining.
-	if len(ActiveHarnesses()) != 0 {
-		t.Fatalf("test harnesses still active after TearDownAll")
-	}
-
-	for _, harness := range initialActiveHarnesses {
-		// Ensure all test directories have been deleted.
-		if _, err := os.Stat(harness.testNodeDir); err == nil {
-			if !(debug || trace) {
-				t.Errorf("created test datadir was not deleted.")
-			}
-		}
-	}
-}
-
-func testActiveHarnesses(_ context.Context, r *Harness, t *testing.T) {
-	tracef(t, "testActiveHarnesses start")
-	defer tracef(t, "testActiveHarnesses end")
-
-	numInitialHarnesses := len(ActiveHarnesses())
-
-	// Create a single test harness.
-	harness1, err := New(t, chaincfg.RegNetParams(), nil, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer harness1.TearDown()
-
-	// With the harness created above, a single harness should be detected
-	// as active.
-	numActiveHarnesses := len(ActiveHarnesses())
-	if !(numActiveHarnesses > numInitialHarnesses) {
-		t.Fatalf("ActiveHarnesses not updated, should have an " +
-			"additional test harness listed.")
 	}
 }
 
@@ -637,15 +585,7 @@ func TestHarness(t *testing.T) {
 	}
 
 	// Cleanup when we exit.
-	defer func() {
-		// Clean up any active harnesses that are still currently
-		// running.
-		if len(ActiveHarnesses()) > 0 {
-			if err := TearDownAll(); err != nil {
-				t.Fatalf("unable to tear down chain: %v", err)
-			}
-		}
-	}()
+	defer mainHarness.TearDownInTest(t)
 
 	// We should have the expected amount of mature unspent outputs.
 	expectedBalance := dcrutil.Amount(numMatureOutputs * 300 * dcrutil.AtomsPerCoin)
@@ -691,10 +631,6 @@ func TestHarness(t *testing.T) {
 			name: "testNodesConnected",
 		},
 		{
-			f:    testActiveHarnesses,
-			name: "testActiveHarnesses",
-		},
-		{
 			f:    testJoinBlocks,
 			name: "testJoinBlocks",
 		},
@@ -712,24 +648,13 @@ func TestHarness(t *testing.T) {
 		},
 	}
 
-	for _, testCase := range tests {
-		t.Logf("=== Running test: %v ===", testCase.name)
-
-		c := make(chan struct{})
-		go func() {
-			testCase.f(ctx, mainHarness, t)
-			c <- struct{}{}
-		}()
-
-		// Go wait for 10 seconds
-		select {
-		case <-c:
-		case <-time.After(10 * time.Second):
-			t.Logf("Test timeout, aborting running nodes")
-			PanicAll(t)
-			os.Exit(1)
+	for _, tc := range tests {
+		tc := tc
+		ok := t.Run(tc.name, func(t *testing.T) {
+			tc.f(ctx, mainHarness, t)
+		})
+		if !ok {
+			return
 		}
 	}
-
-	testTearDownAll(t)
 }
