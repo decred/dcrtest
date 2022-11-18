@@ -670,66 +670,64 @@ func TestHarness(t *testing.T) {
 	}
 
 	// Skip tests when running with -short
-	if !testing.Short() {
-		tests := []struct {
-			name string
-			f    func(context.Context, *Harness, *testing.T)
-		}{
-			{
-				f:    testSendOutputs,
-				name: "testSendOutputs",
-			},
-			{
-				f:    testConnectNode,
-				name: "testConnectNode",
-			},
-			{
-				f:    testDisconnectNode,
-				name: "testDisconnectNode",
-			},
-			{
-				f:    testNodesConnected,
-				name: "testNodesConnected",
-			},
-			{
-				f:    testActiveHarnesses,
-				name: "testActiveHarnesses",
-			},
-			{
-				f:    testJoinBlocks,
-				name: "testJoinBlocks",
-			},
-			{
-				f:    testJoinMempools, // Depends on results of testJoinBlocks
-				name: "testJoinMempools",
-			},
-			{
-				f:    testMemWalletReorg,
-				name: "testMemWalletReorg",
-			},
-			{
-				f:    testMemWalletLockedOutputs,
-				name: "testMemWalletLockedOutputs",
-			},
-		}
+	tests := []struct {
+		name string
+		f    func(context.Context, *Harness, *testing.T)
+	}{
+		{
+			f:    testSendOutputs,
+			name: "testSendOutputs",
+		},
+		{
+			f:    testConnectNode,
+			name: "testConnectNode",
+		},
+		{
+			f:    testDisconnectNode,
+			name: "testDisconnectNode",
+		},
+		{
+			f:    testNodesConnected,
+			name: "testNodesConnected",
+		},
+		{
+			f:    testActiveHarnesses,
+			name: "testActiveHarnesses",
+		},
+		{
+			f:    testJoinBlocks,
+			name: "testJoinBlocks",
+		},
+		{
+			f:    testJoinMempools, // Depends on results of testJoinBlocks
+			name: "testJoinMempools",
+		},
+		{
+			f:    testMemWalletReorg,
+			name: "testMemWalletReorg",
+		},
+		{
+			f:    testMemWalletLockedOutputs,
+			name: "testMemWalletLockedOutputs",
+		},
+	}
 
-		for _, testCase := range tests {
-			t.Logf("=== Running test: %v ===", testCase.name)
+	for _, testCase := range tests {
+		t.Logf("=== Running test: %v ===", testCase.name)
 
-			c := make(chan struct{})
-			go func() {
-				testCase.f(ctx, mainHarness, t)
-				c <- struct{}{}
-			}()
+		c := make(chan struct{})
+		go func() {
+			testCase.f(ctx, mainHarness, t)
+			c <- struct{}{}
+		}()
 
-			// Go wait for 10 seconds
-			select {
-			case <-c:
-			case <-time.After(10 * time.Second):
-				t.Logf("Test timeout, aborting running nodes")
-				PanicAll(t)
-				os.Exit(1)
-			}
+		// Go wait for 10 seconds
+		select {
+		case <-c:
+		case <-time.After(10 * time.Second):
+			t.Logf("Test timeout, aborting running nodes")
+			PanicAll(t)
+			os.Exit(1)
 		}
 	}
 
