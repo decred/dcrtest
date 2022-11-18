@@ -117,10 +117,14 @@ func SetPathToDCRD(fnScopePathToDCRD string) {
 // New creates and initializes new instance of the rpc test harness.
 // Optionally, websocket handlers and a specified configuration may be passed.
 // In the case that a nil config is passed, a default configuration will be
-// used. If pathToDCRD has not been set, then an appropriate version of the
-// dcrd binary must exist in the current PATH environment variable. If
-// pathToDCRD has already been set, the executable at that location will be
 // used.
+//
+// If pathToDCRD has been set to a non-empty value, the dcrd executable at that
+// location will be used. Otherwise, a dcrd binary will be built in
+// a temporary dir and that binary will be used for this and any subsequent
+// calls to New(). This requires having the Go toolchain installed and
+// available. The version of the dcrd binary that will be built depends on the
+// one required by the executing code.
 //
 // NOTE: This function is safe for concurrent access, but care must be taken
 // when calling New with different dcrd executables, as whatever is at
@@ -170,6 +174,19 @@ func New(t *testing.T, activeNet *chaincfg.Params, handlers *rpcclient.Notificat
 	if err != nil {
 		return nil, err
 	}
+
+	// Create the dcrd node used for tests if not created yet.
+	pathToDCRDMtx.Lock()
+	if pathToDCRD == "" {
+		newPath, err := buildDcrd()
+		if err != nil {
+			pathToDCRDMtx.Unlock()
+			return nil, err
+		}
+		pathToDCRD = newPath
+	}
+	config.pathToDCRD = pathToDCRD
+	pathToDCRDMtx.Unlock()
 
 	// Uncomment and change to enable additional dcrd debug/trace output.
 	// config.debugLevel = "TXMP=trace,TRSY=trace,RPCS=trace,PEER=trace"

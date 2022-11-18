@@ -3,6 +3,9 @@
 set -e
 #set -x
 
+# Any args passed to run_tests.sh are sent to go test.
+GOTESTARGS=$*
+
 # The script does automatic checking on a Go package and its sub-packages,
 # including:
 # 1. gofmt         (https://golang.org/cmd/gofmt/)
@@ -45,7 +48,7 @@ for module in $MODPATHS; do
   (
     cd $MODNAME
 
-    GOWORK="$GOWORK" go test ./...
+    GOWORK="$GOWORK" go test ./... $GOTESTARGS
 
     golangci-lint run --disable-all --deadline=10m \
       --enable=gofmt \

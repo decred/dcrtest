@@ -190,19 +190,8 @@ func (n *node) tracef(format string, args ...interface{}) {
 
 // newNode creates a new node instance according to the passed config. dataDir
 // will be used to hold a file recording the pid of the launched process, and
-// as the base for the log and data directories for dcrd. If pathToDCRD has a
-// non-zero value, the executable located there is used.
+// as the base for the log and data directories for dcrd.
 func newNode(t *testing.T, config *nodeConfig, dataDir string) (*node, error) {
-	// Create the dcrd node used for tests if not created yet.
-	pathToDCRDMtx.Lock()
-	if pathToDCRD == "" {
-		pathToDCRD = "dcrd"
-		if runtime.GOOS == "windows" {
-			pathToDCRD += ".exe"
-		}
-	}
-	config.pathToDCRD = pathToDCRD
-	pathToDCRDMtx.Unlock()
 	return &node{
 		config:  config,
 		dataDir: dataDir,
