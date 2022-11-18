@@ -87,7 +87,7 @@ func TestMinimalVotingWallet(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer hn.TearDown()
+	defer hn.TearDownInTest(t)
 
 	if _, err := AdjustedSimnetMiner(ctx, hn.Node, 64); err != nil {
 		t.Fatal(err)
@@ -135,10 +135,5 @@ func TestMinimalVotingWallet(t *testing.T) {
 		if !success {
 			break
 		}
-	}
-
-	err = hn.TearDown()
-	if err != nil {
-		t.Fatalf("errored while tearing down test harness: %v", err)
 	}
 }

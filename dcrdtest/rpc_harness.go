@@ -344,6 +344,21 @@ func (h *Harness) TearDown() error {
 	return nil
 }
 
+// TearDownInTest performs the TearDown during a test, logging the error to the
+// test object. If the test has not yet failed and the TearDown itself fails,
+// then this fails the test.
+func (h *Harness) TearDownInTest(t testing.TB) {
+	err := h.TearDown()
+	if err != nil {
+		errMsg := fmt.Sprintf("Unable to teardown dcrdtest harness: %v", err)
+		if !t.Failed() {
+			t.Fatalf(errMsg)
+		} else {
+			t.Logf(errMsg)
+		}
+	}
+}
+
 // connectRPCClient attempts to establish an RPC connection to the created dcrd
 // process belonging to this Harness instance. If the initial connection
 // attempt fails, this function will retry h.maxConnRetries times, backing off
