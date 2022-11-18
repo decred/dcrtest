@@ -51,12 +51,6 @@ var (
 	// running or simply due to the stars aligning on the process IDs.
 	processID = os.Getpid()
 
-	// testInstances is a private package-level slice used to keep track of
-	// all active test harnesses. This global can be used to perform
-	// various "joins", shutdown several active harnesses after a test,
-	// etc.
-	testInstances = make(map[string]*Harness)
-
 	// Used to protest concurrent access to above declared variables.
 	harnessStateMtx sync.RWMutex
 
@@ -200,7 +194,7 @@ func New(t *testing.T, activeNet *chaincfg.Params, handlers *rpcclient.Notificat
 		return nil, err
 	}
 	nodeNum := numTestInstances
-	numTestInstances++ // XXX this really should be the length of the harness map.
+	numTestInstances++
 
 	if handlers == nil {
 		handlers = &rpcclient.NotificationHandlers{}
@@ -240,10 +234,6 @@ func New(t *testing.T, activeNet *chaincfg.Params, handlers *rpcclient.Notificat
 		wallet:         wallet,
 		t:              t,
 	}
-
-	// Track this newly created test instance within the package level
-	// global map of all active test instances.
-	testInstances[h.testNodeDir] = h
 
 	return h, nil
 }
@@ -337,9 +327,6 @@ func (h *Harness) TearDown() error {
 			return err
 		}
 	}
-
-	tracef(h.t, "TearDown deleting %v", h.node.pid)
-	delete(testInstances, h.testNodeDir)
 
 	return nil
 }
