@@ -61,10 +61,6 @@ var (
 	pathToDCRDMtx sync.RWMutex
 )
 
-// HarnessTestCase represents a test-case which utilizes an instance of the
-// Harness to exercise functionality.
-type HarnessTestCase func(ctx context.Context, r *Harness, t *testing.T)
-
 // Harness fully encapsulates an active dcrd process to provide a unified
 // platform for creating rpc driven integration tests involving dcrd. The
 // active dcrd node will typically be run in simnet mode in order to allow for
