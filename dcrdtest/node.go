@@ -49,11 +49,19 @@ type nodeConfig struct {
 	// pipeTX are the read/write ends of a pipe that is used with the
 	// --pipetx dcrd arg.
 	pipeTX ipcPipePair
+
+	// pipeRX are the read/write ends of a pipe that is used with the
+	// --piperx dcrd arg.
+	pipeRX ipcPipePair
 }
 
 // newConfig returns a newConfig with all default values.
 func newConfig(prefix, certFile, keyFile string, extra []string) (*nodeConfig, error) {
 	pipeTX, err := newIPCPipePair(true, false)
+	if err != nil {
+		return nil, fmt.Errorf("unable to create pipe for dcrd IPC: %v", err)
+	}
+	pipeRX, err := newIPCPipePair(false, true)
 	if err != nil {
 		return nil, fmt.Errorf("unable to create pipe for dcrd IPC: %v", err)
 	}
@@ -71,6 +79,7 @@ func newConfig(prefix, certFile, keyFile string, extra []string) (*nodeConfig, e
 		keyFile:  keyFile,
 
 		pipeTX: pipeTX,
+		pipeRX: pipeRX,
 	}
 	if err := a.setDefaults(); err != nil {
 		return nil, err
@@ -337,16 +346,23 @@ func (n *node) stop() error {
 		return nil
 	}
 
-	// Send kill command
-	n.tracef("stop send kill")
-	var err error
-	if runtime.GOOS == "windows" {
-		err = n.cmd.Process.Signal(os.Kill)
-	} else {
-		err = n.cmd.Process.Signal(os.Interrupt)
-	}
+	// Attempt a graceful dcrd shutdown by closing the pipeRX files.
+	err := n.config.pipeRX.close()
 	if err != nil {
-		n.t.Logf("stop Signal error: %v", err)
+		n.logf("Unable to close piperx ends: %v", err)
+
+		// Make a harder attempt at shutdown, by sending an interrupt
+		// signal.
+		n.tracef("stop send kill")
+		var err error
+		if runtime.GOOS == "windows" {
+			err = n.cmd.Process.Signal(os.Kill)
+		} else {
+			err = n.cmd.Process.Signal(os.Interrupt)
+		}
+		if err != nil {
+			n.t.Logf("stop Signal error: %v", err)
+		}
 	}
 
 	// Wait for pipes.
