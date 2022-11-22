@@ -5,7 +5,7 @@ go 1.18
 // The following require defines the version of dcrd that is built for tests
 // of this package and the minimum version used when this package is required
 // by a client module (unless overridden in the main module or workspace).
-require github.com/decred/dcrd v1.2.1-0.20221010183630-f886cda024a0
+require github.com/decred/dcrd v1.2.1-0.20221123192607-fc017ce3bb3b
 
 require (
 	github.com/decred/dcrd/blockchain/stake/v5 v5.0.0
@@ -18,7 +18,7 @@ require (
 	github.com/decred/dcrd/dcrutil/v4 v4.0.0
 	github.com/decred/dcrd/hdkeychain/v3 v3.1.0
 	github.com/decred/dcrd/rpc/jsonrpc/types/v4 v4.0.0
-	github.com/decred/dcrd/rpcclient/v8 v8.0.0-20221114145511-ab226e09a66a
+	github.com/decred/dcrd/rpcclient/v8 v8.0.0
 	github.com/decred/dcrd/txscript/v4 v4.0.0
 	github.com/decred/dcrd/wire v1.5.0
 )
@@ -27,11 +27,9 @@ require (
 	github.com/agl/ed25519 v0.0.0-20170116200512-5312a6153412 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/dchest/siphash v1.2.2 // indirect
-	github.com/decred/base58 v1.0.3 // indirect
+	github.com/decred/base58 v1.0.4 // indirect
 	github.com/decred/dcrd/addrmgr/v2 v2.0.0 // indirect
 	github.com/decred/dcrd/bech32 v1.1.2 // indirect
-	github.com/decred/dcrd/blockchain/stake/v4 v4.0.0 // indirect
-	github.com/decred/dcrd/blockchain/v4 v4.1.0 // indirect
 	github.com/decred/dcrd/connmgr/v3 v3.1.0 // indirect
 	github.com/decred/dcrd/container/apbf v1.0.0 // indirect
 	github.com/decred/dcrd/crypto/blake256 v1.0.0 // indirect
@@ -39,15 +37,14 @@ require (
 	github.com/decred/dcrd/database/v3 v3.0.0 // indirect
 	github.com/decred/dcrd/dcrec/edwards/v2 v2.0.2 // indirect
 	github.com/decred/dcrd/dcrjson/v4 v4.0.0 // indirect
-	github.com/decred/dcrd/gcs/v3 v3.0.0 // indirect
 	github.com/decred/dcrd/gcs/v4 v4.0.0 // indirect
 	github.com/decred/dcrd/lru v1.1.1 // indirect
+	github.com/decred/dcrd/math/uint256 v1.0.0 // indirect
 	github.com/decred/dcrd/peer/v3 v3.0.0 // indirect
-	github.com/decred/dcrd/rpc/jsonrpc/types/v3 v3.0.0 // indirect
 	github.com/decred/go-socks v1.1.0 // indirect
 	github.com/decred/slog v1.2.0 // indirect
 	github.com/golang/snappy v0.0.4 // indirect
-	github.com/gorilla/websocket v1.4.2 // indirect
+	github.com/gorilla/websocket v1.5.0 // indirect
 	github.com/jessevdk/go-flags v1.5.0 // indirect
 	github.com/jrick/bitset v1.0.0 // indirect
 	github.com/jrick/logrotate v1.0.0 // indirect
@@ -57,6 +54,9 @@ require (
 
 replace (
 	github.com/decred/dcrd/blockchain/stake/v5 => github.com/decred/dcrd/blockchain/stake/v5 v5.0.0-20221022042529-0a0cc3b3bf92
+	github.com/decred/dcrd/blockchain/standalone/v2 => github.com/decred/dcrd/blockchain/standalone/v2 v2.1.1-0.20221022042529-0a0cc3b3bf92
+	github.com/decred/dcrd/blockchain/v5 => github.com/decred/dcrd/blockchain/v5 v5.0.0-20221022042529-0a0cc3b3bf92
 	github.com/decred/dcrd/gcs/v4 => github.com/decred/dcrd/gcs/v4 v4.0.0-20221022042529-0a0cc3b3bf92
 	github.com/decred/dcrd/rpc/jsonrpc/types/v4 => github.com/decred/dcrd/rpc/jsonrpc/types/v4 v4.0.0-20221022042529-0a0cc3b3bf92
+	github.com/decred/dcrd/rpcclient/v8 => github.com/decred/dcrd/rpcclient/v8 v8.0.0-20221022042529-0a0cc3b3bf92
 )

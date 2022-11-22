@@ -108,7 +108,7 @@ func assertConnectedTo(ctx context.Context, t *testing.T, nodeA *Harness, nodeB 
 		t.Fatalf("unable to get nodeA's peer info")
 	}
 
-	nodeAddr := nodeB.node.config.listen
+	nodeAddr := nodeB.P2PAddress()
 	addrFound := false
 	for _, peerInfo := range nodeAPeers {
 		if peerInfo.Addr == nodeAddr {
@@ -160,7 +160,7 @@ func assertNotConnectedTo(ctx context.Context, t *testing.T, nodeA *Harness, nod
 		t.Fatalf("unable to get nodeA's peer info")
 	}
 
-	nodeAddr := nodeB.node.config.listen
+	nodeAddr := nodeB.P2PAddress()
 	addrFound := false
 	for _, peerInfo := range nodeAPeers {
 		if peerInfo.Addr == nodeAddr {

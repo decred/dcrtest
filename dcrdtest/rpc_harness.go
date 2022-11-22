@@ -8,7 +8,6 @@ package dcrdtest
 import (
 	"context"
 	"fmt"
-	"net"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -40,16 +39,6 @@ var (
 
 	// current number of active test nodes.
 	numTestInstances = 0
-
-	// processID is the process ID of the current running process.  It is
-	// used to calculate ports based upon it when launching an rpc
-	// harnesses.  The intent is to allow multiple process to run in
-	// parallel without port collisions.
-	//
-	// It should be noted however that there is still some small probability
-	// that there will be port collisions either due to other processes
-	// running or simply due to the stars aligning on the process IDs.
-	processID = os.Getpid()
 
 	// Used to protest concurrent access to above declared variables.
 	harnessStateMtx sync.RWMutex
@@ -181,9 +170,6 @@ func New(t *testing.T, activeNet *chaincfg.Params, handlers *rpcclient.Notificat
 	// Uncomment and change to enable additional dcrd debug/trace output.
 	// config.debugLevel = "TXMP=trace,TRSY=trace,RPCS=trace,PEER=trace"
 
-	// Generate p2p+rpc listening addresses.
-	config.listen, config.rpcListen = generateListeningAddresses()
-
 	// Create the testing node bounded to the simnet.
 	node, err := newNode(t, config, nodeTestData)
 	if err != nil {
@@ -244,7 +230,7 @@ func New(t *testing.T, activeNet *chaincfg.Params, handlers *rpcclient.Notificat
 func (h *Harness) SetUp(ctx context.Context, createTestChain bool, numMatureOutputs uint32) error {
 	// Start the dcrd node itself. This spawns a new process which will be
 	// managed
-	if err := h.node.start(); err != nil {
+	if err := h.node.start(ctx); err != nil {
 		return err
 	}
 	if err := h.connectRPCClient(); err != nil {
@@ -352,7 +338,8 @@ func (h *Harness) connectRPCClient() error {
 	var client *rpcclient.Client
 	var err error
 
-	rpcConf := h.node.config.rpcConnConfig()
+	rpcConf := h.node.rpcConnConfig()
+	rpcConf.DisableAutoReconnect = true
 	for i := 0; i < h.maxConnRetries; i++ {
 		if client, err = rpcclient.New(&rpcConf, h.handlers); err != nil {
 			time.Sleep(time.Duration(i) * 50 * time.Millisecond)
@@ -422,7 +409,7 @@ func (h *Harness) UnlockOutputs(inputs []*wire.TxIn) {
 // potential RPC clients created within tests to connect to a given test
 // harness instance.
 func (h *Harness) RPCConfig() rpcclient.ConnConfig {
-	return h.node.config.rpcConnConfig()
+	return h.node.rpcConnConfig()
 }
 
 // P2PAddress returns the harness node's configured listening address for P2P
@@ -432,24 +419,5 @@ func (h *Harness) RPCConfig() rpcclient.ConnConfig {
 // ConnectNode() function, which handles cases like already connected peers and
 // ensures the connection actually takes place.
 func (h *Harness) P2PAddress() string {
-	return h.node.config.listen
-}
-
-// generateListeningAddresses returns two strings representing listening
-// addresses designated for the current rpc test. If there haven't been any
-// test instances created, the default ports are used. Otherwise, in order to
-// support multiple test nodes running at once, the p2p and rpc port are
-// incremented after each initialization.
-func generateListeningAddresses() (string, string) {
-	localhost := "127.0.0.1"
-
-	portString := func(minPort, maxPort int) string {
-		port := minPort + numTestInstances + ((20 * processID) %
-			(maxPort - minPort))
-		return strconv.Itoa(port)
-	}
-
-	p2p := net.JoinHostPort(localhost, portString(minPeerPort, maxPeerPort))
-	rpc := net.JoinHostPort(localhost, portString(minRPCPort, maxRPCPort))
-	return p2p, rpc
+	return h.node.p2pAddr
 }

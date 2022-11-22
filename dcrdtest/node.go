@@ -7,6 +7,7 @@ package dcrdtest
 
 import (
 	"bufio"
+	"context"
 	"crypto/elliptic"
 	"errors"
 	"fmt"
@@ -44,13 +45,22 @@ type nodeConfig struct {
 	certFile     string
 	keyFile      string
 	certificates []byte
+
+	// pipeTX are the read/write ends of a pipe that is used with the
+	// --pipetx dcrd arg.
+	pipeTX ipcPipePair
 }
 
 // newConfig returns a newConfig with all default values.
 func newConfig(prefix, certFile, keyFile string, extra []string) (*nodeConfig, error) {
+	pipeTX, err := newIPCPipePair(true, false)
+	if err != nil {
+		return nil, fmt.Errorf("unable to create pipe for dcrd IPC: %v", err)
+	}
+
 	a := &nodeConfig{
-		listen:    "127.0.0.1:18555",
-		rpcListen: "127.0.0.1:18556",
+		listen:    "127.0.0.1:0",
+		rpcListen: "127.0.0.1:0",
 		rpcUser:   "user",
 		rpcPass:   "pass",
 		extra:     extra,
@@ -59,6 +69,8 @@ func newConfig(prefix, certFile, keyFile string, extra []string) (*nodeConfig, e
 		endpoint: "ws",
 		certFile: certFile,
 		keyFile:  keyFile,
+
+		pipeTX: pipeTX,
 	}
 	if err := a.setDefaults(); err != nil {
 		return nil, err
@@ -128,26 +140,20 @@ func (n *nodeConfig) arguments() []string {
 	}
 	// --allowunsyncedmining
 	args = append(args, "--allowunsyncedmining")
+
+	// Setup the pipetx mechanism to receive the rpcclient and listen ports.
+	args = appendOSNodeArgs(n, args)
+	args = append(args, "--boundaddrevents")
+
 	args = append(args, n.extra...)
 	return args
 }
 
 // command returns the exec.Cmd which will be used to start the dcrd process.
 func (n *nodeConfig) command() *exec.Cmd {
-	return exec.Command(n.pathToDCRD, n.arguments()...)
-}
-
-// rpcConnConfig returns the rpc connection config that can be used to connect
-// to the dcrd process that is launched via Start().
-func (n *nodeConfig) rpcConnConfig() rpc.ConnConfig {
-	return rpc.ConnConfig{
-		Host:                 n.rpcListen,
-		Endpoint:             n.endpoint,
-		User:                 n.rpcUser,
-		Pass:                 n.rpcPass,
-		Certificates:         n.certificates,
-		DisableAutoReconnect: true,
-	}
+	cmd := exec.Command(n.pathToDCRD, n.arguments()...)
+	setOSNodeCmdOptions(n, cmd)
+	return cmd
 }
 
 // String returns the string representation of this nodeConfig.
@@ -166,6 +172,10 @@ type node struct {
 	stdout  io.ReadCloser
 	wg      sync.WaitGroup
 	pid     int
+
+	// Locally bound addresses for the subsystems.
+	p2pAddr string
+	rpcAddr string
 
 	dataDir string
 
@@ -205,7 +215,7 @@ func newNode(t *testing.T, config *nodeConfig, dataDir string) (*node, error) {
 // terminate the process in case of a hang, or panic. In the case of a failing
 // test case, or panic, it is important that the process be stopped via stop(),
 // otherwise, it will persist unless explicitly killed.
-func (n *node) start() error {
+func (n *node) start(ctx context.Context) error {
 	var err error
 
 	var pid sync.WaitGroup
@@ -251,6 +261,35 @@ func (n *node) start() error {
 		}
 	}()
 
+	// Read the subsystem addresses.
+	gotSubsysAddrs := make(chan struct{})
+	var p2pAddr, rpcAddr string
+	go func() {
+		for {
+			msg, err := nextIPCMessage(n.config.pipeTX.r)
+			if err != nil {
+				n.logf("Unable to read next IPC message: %v", err)
+				return
+			}
+			switch msg := msg.(type) {
+			case boundP2PListenAddrEvent:
+				p2pAddr = string(msg)
+			case boundRPCListenAddrEvent:
+				rpcAddr = string(msg)
+			}
+			if p2pAddr != "" && rpcAddr != "" {
+				close(gotSubsysAddrs)
+				break
+			}
+		}
+
+		// Drain messages until the pipe is closed.
+		var err error
+		for err == nil {
+			_, err = nextIPCMessage(n.config.pipeRX.r)
+		}
+	}()
+
 	// Launch command and store pid.
 	if err := n.cmd.Start(); err != nil {
 		return err
@@ -269,8 +308,20 @@ func (n *node) start() error {
 	if _, err = fmt.Fprintf(f, "%d\n", n.cmd.Process.Pid); err != nil {
 		return err
 	}
+	if err := f.Close(); err != nil {
+		return err
+	}
 
-	return f.Close()
+	// Read the RPC and P2P addresses.
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-gotSubsysAddrs:
+		n.p2pAddr = p2pAddr
+		n.rpcAddr = rpcAddr
+	}
+
+	return nil
 }
 
 // stop interrupts the running dcrd process, and waits until it exits
@@ -308,6 +359,11 @@ func (n *node) stop() error {
 	if err != nil {
 		n.t.Logf("stop cmd.Wait error: %v", err)
 	}
+
+	// Close the IPC pipes.
+	if err := n.config.pipeTX.close(); err != nil {
+		n.logf("Unable to close pipe TX: %v", err)
+	}
 	return nil
 }
 
@@ -340,6 +396,18 @@ func (n *node) shutdown() error {
 		return err
 	}
 	return n.cleanup()
+}
+
+// rpcConnConfig returns the rpc connection config that can be used to connect
+// to the dcrd process that is launched via Start().
+func (n *node) rpcConnConfig() rpc.ConnConfig {
+	return rpc.ConnConfig{
+		Host:         n.rpcAddr,
+		Endpoint:     n.config.endpoint,
+		User:         n.config.rpcUser,
+		Pass:         n.config.rpcPass,
+		Certificates: n.config.certificates,
+	}
 }
 
 // genCertPair generates a key/cert pair to the paths provided.

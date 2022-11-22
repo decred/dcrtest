@@ -119,7 +119,7 @@ func ConnectNode(ctx context.Context, from *Harness, to *Harness) error {
 	numPeers := len(peerInfo)
 	tracef(from.t, "ConnectNode numPeers: %v", numPeers)
 
-	targetAddr := to.node.config.listen
+	targetAddr := to.P2PAddress()
 	if err := from.Node.AddNode(ctx, targetAddr, rpcclient.ANAdd); err != nil {
 		return err
 	}
@@ -148,7 +148,7 @@ func ConnectNode(ctx context.Context, from *Harness, to *Harness) error {
 //
 // This function returns an error if the nodes were not previously connected.
 func RemoveNode(ctx context.Context, from *Harness, to *Harness) error {
-	targetAddr := to.node.config.listen
+	targetAddr := to.P2PAddress()
 	if err := from.Node.AddNode(ctx, targetAddr, rpcclient.ANRemove); err != nil {
 		// AddNode(..., ANRemove) returns an error if the peer is not found
 		return err
@@ -183,7 +183,7 @@ func NodesConnected(ctx context.Context, from, to *Harness, allowReverse bool) (
 		return false, err
 	}
 
-	targetAddr := to.node.config.listen
+	targetAddr := to.P2PAddress()
 	for _, p := range peerInfo {
 		if p.Addr == targetAddr {
 			return true, nil
@@ -200,7 +200,7 @@ func NodesConnected(ctx context.Context, from, to *Harness, allowReverse bool) (
 		return false, err
 	}
 
-	targetAddr = from.node.config.listen
+	targetAddr = from.P2PAddress()
 	for _, p := range peerInfo {
 		if p.Addr == targetAddr {
 			return true, nil
