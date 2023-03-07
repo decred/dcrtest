@@ -23,16 +23,6 @@ import (
 	"github.com/decred/dcrd/wire"
 )
 
-const (
-	// These constants define the minimum and maximum p2p and rpc port
-	// numbers used by a test harness.  The min port is inclusive while the
-	// max port is exclusive.
-	minPeerPort = 10000
-	maxPeerPort = 35000
-	minRPCPort  = maxPeerPort
-	maxRPCPort  = 60000
-)
-
 var (
 	// XXX these variables are accessed in what should be accessor
 	// functions yet it is all global
