@@ -504,9 +504,9 @@ func (w *VotingWallet) handleWinningTicketsNtfn(ctx context.Context, ntfn *winni
 
 	// Always consider the subsidy split enabled since the test voting wallet
 	// is only used with simnet where the agenda is always active.
-	const isSubsidySplitEnabled = true
-	stakebaseValue := w.subsidyCache.CalcStakeVoteSubsidyV2(ntfn.blockHeight,
-		isSubsidySplitEnabled)
+	const subsidySplitVariant = standalone.SSVDCP0012
+	stakebaseValue := w.subsidyCache.CalcStakeVoteSubsidyV3(ntfn.blockHeight,
+		subsidySplitVariant)
 
 	// Create the votes. nbVotes is the number of tickets from the wallet that
 	// voted.
