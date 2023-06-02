@@ -50,14 +50,7 @@ for module in $MODPATHS; do
 
     GOWORK="$GOWORK" go test ./... $GOTESTARGS
 
-    golangci-lint run --disable-all --deadline=10m \
-      --enable=gofmt \
-      --enable=gosimple \
-      --enable=unconvert \
-      --enable=ineffassign \
-      --enable=govet \
-      --enable=misspell \
-      --enable=unused \
+    golangci-lint run
   )
 done
 
