@@ -5,7 +5,7 @@ go 1.19
 // The following require defines the version of dcrd that is built for tests
 // of this package and the minimum version used when this package is required
 // by a client module (unless overridden in the main module or workspace).
-require github.com/decred/dcrd v1.2.1-0.20230430213532-8f3e24955554
+require github.com/decred/dcrd v1.2.1-0.20230607185305-0f38dbf2041b
 
 require (
 	github.com/decred/dcrd/blockchain/stake/v5 v5.0.0

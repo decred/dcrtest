@@ -46,8 +46,8 @@ func solveBlock(header *wire.BlockHeader) bool {
 				return
 			default:
 				hdr.Nonce = i
-				hash := hdr.BlockHash()
-				if standalone.HashToBig(&hash).Cmp(
+				powHash := hdr.PowHashV2()
+				if standalone.HashToBig(&powHash).Cmp(
 					targetDifficulty) <= 0 {
 
 					results <- sbResult{true, i}
