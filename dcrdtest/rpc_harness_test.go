@@ -23,8 +23,8 @@ const (
 )
 
 func testSendOutputs(ctx context.Context, r *Harness, t *testing.T) {
-	tracef(t, "testSendOutputs start")
-	defer tracef(t, "testSendOutputs end")
+	log.Tracef("testSendOutputs start")
+	defer log.Tracef("testSendOutputs end")
 
 	genSpend := func(amt dcrutil.Amount) *chainhash.Hash {
 		// Grab a fresh address from the wallet.
@@ -100,8 +100,8 @@ func testSendOutputs(ctx context.Context, r *Harness, t *testing.T) {
 }
 
 func assertConnectedTo(ctx context.Context, t *testing.T, nodeA *Harness, nodeB *Harness) {
-	tracef(t, "assertConnectedTo start")
-	defer tracef(t, "assertConnectedTo end")
+	log.Tracef("assertConnectedTo start")
+	defer log.Tracef("assertConnectedTo end")
 
 	nodeAPeers, err := nodeA.Node.GetPeerInfo(ctx)
 	if err != nil {
@@ -113,7 +113,7 @@ func assertConnectedTo(ctx context.Context, t *testing.T, nodeA *Harness, nodeB 
 	for _, peerInfo := range nodeAPeers {
 		if peerInfo.Addr == nodeAddr {
 			addrFound = true
-			tracef(t, "found %v", nodeAddr)
+			log.Tracef("found %v", nodeAddr)
 			break
 		}
 	}
@@ -124,8 +124,8 @@ func assertConnectedTo(ctx context.Context, t *testing.T, nodeA *Harness, nodeB 
 }
 
 func testConnectNode(ctx context.Context, r *Harness, t *testing.T) {
-	tracef(t, "testConnectNode start")
-	defer tracef(t, "testConnectNode end")
+	log.Tracef("testConnectNode start")
+	defer log.Tracef("testConnectNode end")
 
 	// Create a fresh test harness.
 	harness, err := New(t, chaincfg.RegNetParams(), nil, nil)
@@ -136,7 +136,7 @@ func testConnectNode(ctx context.Context, r *Harness, t *testing.T) {
 		t.Fatalf("unable to complete harness setup: %v", err)
 	}
 	defer func() {
-		tracef(t, "testConnectNode: calling harness.TearDown")
+		log.Tracef("testConnectNode: calling harness.TearDown")
 		harness.TearDown()
 	}()
 
@@ -152,8 +152,8 @@ func testConnectNode(ctx context.Context, r *Harness, t *testing.T) {
 }
 
 func assertNotConnectedTo(ctx context.Context, t *testing.T, nodeA *Harness, nodeB *Harness) {
-	tracef(t, "assertNotConnectedTo start")
-	defer tracef(t, "assertNotConnectedTo end")
+	log.Tracef("assertNotConnectedTo start")
+	defer log.Tracef("assertNotConnectedTo end")
 
 	nodeAPeers, err := nodeA.Node.GetPeerInfo(ctx)
 	if err != nil {
@@ -175,8 +175,8 @@ func assertNotConnectedTo(ctx context.Context, t *testing.T, nodeA *Harness, nod
 }
 
 func testDisconnectNode(ctx context.Context, r *Harness, t *testing.T) {
-	tracef(t, "testDisconnectNode start")
-	defer tracef(t, "testDisconnectNode end")
+	log.Tracef("testDisconnectNode start")
+	defer log.Tracef("testDisconnectNode end")
 
 	// Create a fresh test harness.
 	harness, err := New(t, chaincfg.RegNetParams(), nil, nil)
@@ -225,8 +225,8 @@ func testDisconnectNode(ctx context.Context, r *Harness, t *testing.T) {
 }
 
 func testNodesConnected(ctx context.Context, r *Harness, t *testing.T) {
-	tracef(t, "testNodesConnected start")
-	defer tracef(t, "testNodesConnected end")
+	log.Tracef("testNodesConnected start")
+	defer log.Tracef("testNodesConnected end")
 
 	// Create a fresh test harness.
 	harness, err := New(t, chaincfg.RegNetParams(), nil, nil)
@@ -297,8 +297,8 @@ func testNodesConnected(ctx context.Context, r *Harness, t *testing.T) {
 }
 
 func testJoinMempools(ctx context.Context, r *Harness, t *testing.T) {
-	tracef(t, "testJoinMempools start")
-	defer tracef(t, "testJoinMempools end")
+	log.Tracef("testJoinMempools start")
+	defer log.Tracef("testJoinMempools end")
 
 	// Assert main test harness has no transactions in its mempool.
 	pooledHashes, err := r.Node.GetRawMempool(ctx, dcrdtypes.GRMAll)
@@ -426,8 +426,8 @@ func testJoinMempools(ctx context.Context, r *Harness, t *testing.T) {
 }
 
 func testJoinBlocks(ctx context.Context, r *Harness, t *testing.T) {
-	tracef(t, "testJoinBlocks start")
-	defer tracef(t, "testJoinBlocks end")
+	log.Tracef("testJoinBlocks start")
+	defer log.Tracef("testJoinBlocks end")
 
 	// Create a second harness with only the genesis block so it is behind
 	// the main harness.
@@ -482,8 +482,8 @@ func testJoinBlocks(ctx context.Context, r *Harness, t *testing.T) {
 }
 
 func testMemWalletReorg(ctx context.Context, r *Harness, t *testing.T) {
-	tracef(t, "testMemWalletReorg start")
-	defer tracef(t, "testMemWalletReorg end")
+	log.Tracef("testMemWalletReorg start")
+	defer log.Tracef("testMemWalletReorg end")
 
 	// Create a fresh harness, we'll be using the main harness to force a
 	// re-org on this local harness.
@@ -526,8 +526,8 @@ func testMemWalletReorg(ctx context.Context, r *Harness, t *testing.T) {
 }
 
 func testMemWalletLockedOutputs(ctx context.Context, r *Harness, t *testing.T) {
-	tracef(t, "testMemWalletLockedOutputs start")
-	defer tracef(t, "testMemWalletLockedOutputs end")
+	log.Tracef("testMemWalletLockedOutputs start")
+	defer log.Tracef("testMemWalletLockedOutputs end")
 
 	// Obtain the initial balance of the wallet at this point.
 	startingBalance := r.ConfirmedBalance()

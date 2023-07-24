@@ -109,35 +109,35 @@ func syncBlocks(ctx context.Context, nodes []*Harness) error {
 // therefore in the case of disconnects, "from" will attempt to reestablish a
 // connection to the "to" harness.
 func ConnectNode(ctx context.Context, from *Harness, to *Harness) error {
-	tracef(from.t, "ConnectNode start")
-	defer tracef(from.t, "ConnectNode end")
+	log.Tracef("ConnectNode start")
+	defer log.Tracef("ConnectNode end")
 
 	peerInfo, err := from.Node.GetPeerInfo(ctx)
 	if err != nil {
 		return err
 	}
 	numPeers := len(peerInfo)
-	tracef(from.t, "ConnectNode numPeers: %v", numPeers)
+	log.Tracef("ConnectNode numPeers: %v", numPeers)
 
 	targetAddr := to.P2PAddress()
 	if err := from.Node.AddNode(ctx, targetAddr, rpcclient.ANAdd); err != nil {
 		return err
 	}
-	tracef(from.t, "ConnectNode targetAddr: %v", targetAddr)
+	log.Tracef("ConnectNode targetAddr: %v", targetAddr)
 
 	// Block until a new connection has been established.
 	peerInfo, err = from.Node.GetPeerInfo(ctx)
 	if err != nil {
 		return err
 	}
-	tracef(from.t, "ConnectNode peerInfo: %v", peerInfo)
+	log.Tracef("ConnectNode peerInfo: %v", peerInfo)
 	for len(peerInfo) <= numPeers {
 		peerInfo, err = from.Node.GetPeerInfo(ctx)
 		if err != nil {
 			return err
 		}
 	}
-	tracef(from.t, "ConnectNode len(peerInfo): %v", len(peerInfo))
+	log.Tracef("ConnectNode len(peerInfo): %v", len(peerInfo))
 
 	return nil
 }
