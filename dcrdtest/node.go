@@ -18,7 +18,6 @@ import (
 	"runtime"
 	"strconv"
 	"sync"
-	"testing"
 	"time"
 
 	"github.com/decred/dcrd/certgen"
@@ -187,35 +186,22 @@ type node struct {
 	rpcAddr string
 
 	dataDir string
-
-	t *testing.T
 }
 
 // logf is identical to n.t.Logf but it prepends the pid of this  node.
 func (n *node) logf(format string, args ...interface{}) {
 	pid := strconv.Itoa(n.pid) + " "
-	logf(n.t, pid+format, args...)
-}
-
-// tracef is identical to debug.go.tracef but it prepends the pid of this
-// node.
-func (n *node) tracef(format string, args ...interface{}) {
-	if !trace {
-		return
-	}
-	pid := strconv.Itoa(n.pid) + " "
-	tracef(n.t, pid+format, args...)
+	log.Debugf(pid+format, args...)
 }
 
 // newNode creates a new node instance according to the passed config. dataDir
 // will be used to hold a file recording the pid of the launched process, and
 // as the base for the log and data directories for dcrd.
-func newNode(t *testing.T, config *nodeConfig, dataDir string) (*node, error) {
+func newNode(config *nodeConfig, dataDir string) (*node, error) {
 	return &node{
 		config:  config,
 		dataDir: dataDir,
 		cmd:     config.command(),
-		t:       t,
 	}, nil
 }
 
@@ -243,7 +229,7 @@ func (n *node) start(ctx context.Context) error {
 		for {
 			line, err := r.ReadBytes('\n')
 			if errors.Is(err, io.EOF) {
-				n.tracef("stderr: EOF")
+				log.Tracef("stderr: EOF")
 				return
 			}
 			n.logf("stderr: %s", line)
@@ -263,10 +249,10 @@ func (n *node) start(ctx context.Context) error {
 		for {
 			line, err := r.ReadBytes('\n')
 			if errors.Is(err, io.EOF) {
-				n.tracef("stdout: EOF")
+				log.Tracef("stdout: EOF")
 				return
 			}
-			n.tracef("stdout: %s", line)
+			log.Tracef("stdout: %s", line)
 		}
 	}()
 
@@ -337,8 +323,8 @@ func (n *node) start(ctx context.Context) error {
 // properly. On windows, interrupt is not supported, so a kill signal is used
 // instead
 func (n *node) stop() error {
-	n.tracef("stop %p %p", n.cmd, n.cmd.Process)
-	defer n.tracef("stop done")
+	log.Tracef("stop %p %p", n.cmd, n.cmd.Process)
+	defer log.Tracef("stop done")
 
 	if n.cmd == nil || n.cmd.Process == nil {
 		// return if not properly initialized
@@ -353,7 +339,7 @@ func (n *node) stop() error {
 
 		// Make a harder attempt at shutdown, by sending an interrupt
 		// signal.
-		n.tracef("stop send kill")
+		log.Tracef("stop send kill")
 		var err error
 		if runtime.GOOS == "windows" {
 			err = n.cmd.Process.Signal(os.Kill)
@@ -361,19 +347,19 @@ func (n *node) stop() error {
 			err = n.cmd.Process.Signal(os.Interrupt)
 		}
 		if err != nil {
-			n.t.Logf("stop Signal error: %v", err)
+			log.Debugf("stop Signal error: %v", err)
 		}
 	}
 
 	// Wait for pipes.
-	n.tracef("stop wg")
+	log.Tracef("stop wg")
 	n.wg.Wait()
 
 	// Wait for command to exit.
-	n.tracef("stop cmd.Wait")
+	log.Tracef("stop cmd.Wait")
 	err = n.cmd.Wait()
 	if err != nil {
-		n.t.Logf("stop cmd.Wait error: %v", err)
+		log.Debugf("stop cmd.Wait error: %v", err)
 	}
 
 	// Close the IPC pipes.
@@ -387,12 +373,12 @@ func (n *node) stop() error {
 // created process will be deleted, as well as any directories created by the
 // process.
 func (n *node) cleanup() error {
-	n.tracef("cleanup")
-	defer n.tracef("cleanup done")
+	log.Tracef("cleanup")
+	defer log.Tracef("cleanup done")
 
 	if n.pidFile != "" {
 		if err := os.Remove(n.pidFile); err != nil {
-			n.t.Logf("unable to remove file %s: %v", n.pidFile,
+			log.Debugf("unable to remove file %s: %v", n.pidFile,
 				err)
 			return err
 		}
@@ -404,11 +390,11 @@ func (n *node) cleanup() error {
 // shutdown terminates the running dcrd process, and cleans up all
 // file/directories created by node.
 func (n *node) shutdown() error {
-	n.tracef("shutdown")
-	defer n.tracef("shutdown done")
+	log.Tracef("shutdown")
+	defer log.Tracef("shutdown done")
 
 	if err := n.stop(); err != nil {
-		n.t.Logf("shutdown stop error: %v", err)
+		log.Debugf("shutdown stop error: %v", err)
 		return err
 	}
 	return n.cleanup()

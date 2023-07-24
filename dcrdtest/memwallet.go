@@ -11,7 +11,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"sync"
-	"testing"
 
 	"github.com/decred/dcrd/blockchain/standalone/v2"
 	"github.com/decred/dcrd/chaincfg/chainhash"
@@ -115,8 +114,6 @@ type memWallet struct {
 
 	net *chaincfg.Params
 
-	t *testing.T
-
 	rpc *rpcclient.Client
 
 	sync.RWMutex
@@ -124,7 +121,7 @@ type memWallet struct {
 
 // newMemWallet creates and returns a fully initialized instance of the
 // memWallet given a particular blockchain's parameters.
-func newMemWallet(t *testing.T, net *chaincfg.Params, harnessID uint32) (*memWallet, error) {
+func newMemWallet(net *chaincfg.Params, harnessID uint32) (*memWallet, error) {
 	// The wallet's final HD seed is: hdSeed || harnessID. This method
 	// ensures that each harness instance uses a deterministic root seed
 	// based on its harness ID.
@@ -164,7 +161,6 @@ func newMemWallet(t *testing.T, net *chaincfg.Params, harnessID uint32) (*memWal
 		hdIndex:           1,
 		hdRoot:            hdRoot,
 		addrs:             addrs,
-		t:                 t,
 		utxos:             make(map[wire.OutPoint]*utxo),
 		chainUpdateSignal: make(chan struct{}),
 		reorgJournal:      make(map[int64]*undoEntry),
@@ -195,8 +191,8 @@ func (m *memWallet) SetRPCClient(rpcClient *rpcclient.Client) {
 // connected to the main chain. Ingesting a block updates the wallet's internal
 // utxo state based on the outputs created and destroyed within each block.
 func (m *memWallet) IngestBlock(header []byte, filteredTxns [][]byte) {
-	tracef(m.t, "memwallet.IngestBlock")
-	defer tracef(m.t, "memwallet.IngestBlock exit")
+	log.Tracef("memwallet.IngestBlock")
+	defer log.Tracef("memwallet.IngestBlock exit")
 
 	var hdr wire.BlockHeader
 	if err := hdr.FromBytes(header); err != nil {
@@ -232,8 +228,8 @@ func (m *memWallet) IngestBlock(header []byte, filteredTxns [][]byte) {
 //
 // NOTE: This MUST be run as a goroutine.
 func (m *memWallet) chainSyncer() {
-	tracef(m.t, "memwallet.chainSyncer")
-	defer tracef(m.t, "memwallet.chainSyncer exit")
+	log.Tracef("memwallet.chainSyncer")
+	defer log.Tracef("memwallet.chainSyncer exit")
 
 	var update *chainUpdate
 
@@ -273,8 +269,8 @@ func (m *memWallet) chainSyncer() {
 // evalOutputs evaluates each of the passed outputs, creating a new matching
 // utxo within the wallet if we're able to spend the output.
 func (m *memWallet) evalOutputs(outputs []*wire.TxOut, txHash *chainhash.Hash, isCoinbase bool, undo *undoEntry) {
-	tracef(m.t, "memwallet.evalOutputs")
-	defer tracef(m.t, "memwallet.evalOutputs exit")
+	log.Tracef("memwallet.evalOutputs")
+	defer log.Tracef("memwallet.evalOutputs exit")
 
 	for i, output := range outputs {
 		pkScript := output.PkScript
@@ -310,8 +306,8 @@ func (m *memWallet) evalOutputs(outputs []*wire.TxOut, txHash *chainhash.Hash, i
 // evalInputs scans all the passed inputs, destroying any utxos within the
 // wallet which are spent by an input.
 func (m *memWallet) evalInputs(inputs []*wire.TxIn, undo *undoEntry) {
-	tracef(m.t, "memwallet.evalInputs")
-	defer tracef(m.t, "memwallet.evalInputs exit")
+	log.Tracef("memwallet.evalInputs")
+	defer log.Tracef("memwallet.evalInputs exit")
 
 	for _, txIn := range inputs {
 		op := txIn.PreviousOutPoint
@@ -329,8 +325,8 @@ func (m *memWallet) evalInputs(inputs []*wire.TxIn, undo *undoEntry) {
 // disconnected from the main chain. Unwinding a block undoes the effect that a
 // particular block had on the wallet's internal utxo state.
 func (m *memWallet) UnwindBlock(header []byte) {
-	tracef(m.t, "memwallet.UnwindBlock")
-	defer tracef(m.t, "memwallet.UnwindBlock exit")
+	log.Tracef("memwallet.UnwindBlock")
+	defer log.Tracef("memwallet.UnwindBlock exit")
 
 	var hdr wire.BlockHeader
 	if err := hdr.FromBytes(header); err != nil {
@@ -358,8 +354,8 @@ func (m *memWallet) UnwindBlock(header []byte) {
 // loads the address into the RPC client's transaction filter to ensure any
 // transactions that involve it are delivered via the notifications.
 func (m *memWallet) newAddress(ctx context.Context) (stdaddr.Address, error) {
-	tracef(m.t, "memwallet.newAddress")
-	defer tracef(m.t, "memwallet.newAddress exit")
+	log.Tracef("memwallet.newAddress")
+	defer log.Tracef("memwallet.newAddress exit")
 
 	index := m.hdIndex
 
@@ -407,8 +403,8 @@ func (m *memWallet) NewAddress(ctx context.Context) (stdaddr.Address, error) {
 //
 // NOTE: The memWallet's mutex must be held when this function is called.
 func (m *memWallet) fundTx(ctx context.Context, tx *wire.MsgTx, amt dcrutil.Amount, feeRate dcrutil.Amount) error {
-	tracef(m.t, "memwallet.fundTx")
-	defer tracef(m.t, "memwallet.fundTx exit")
+	log.Tracef("memwallet.fundTx")
+	defer log.Tracef("memwallet.fundTx exit")
 
 	const (
 		// spendSize is the largest number of bytes of a sigScript
@@ -474,8 +470,8 @@ func (m *memWallet) fundTx(ctx context.Context, tx *wire.MsgTx, amt dcrutil.Amou
 // while observing the passed fee rate. The passed fee rate should be expressed
 // in atoms-per-byte.
 func (m *memWallet) SendOutputs(ctx context.Context, outputs []*wire.TxOut, feeRate dcrutil.Amount) (*chainhash.Hash, error) {
-	tracef(m.t, "memwallet.SendOutputs")
-	defer tracef(m.t, "memwallet.SendOutputs exit")
+	log.Tracef("memwallet.SendOutputs")
+	defer log.Tracef("memwallet.SendOutputs exit")
 
 	tx, err := m.CreateTransaction(ctx, outputs, feeRate)
 	if err != nil {
@@ -491,8 +487,8 @@ func (m *memWallet) SendOutputs(ctx context.Context, outputs []*wire.TxOut, feeR
 //
 // This function is safe for concurrent access.
 func (m *memWallet) CreateTransaction(ctx context.Context, outputs []*wire.TxOut, feeRate dcrutil.Amount) (*wire.MsgTx, error) {
-	tracef(m.t, "memwallet.CreateTransaction")
-	defer tracef(m.t, "memwallet.CreateTransaction exit")
+	log.Tracef("memwallet.CreateTransaction")
+	defer log.Tracef("memwallet.CreateTransaction exit")
 
 	m.Lock()
 	defer m.Unlock()
@@ -557,8 +553,8 @@ func (m *memWallet) CreateTransaction(ctx context.Context, outputs []*wire.TxOut
 //
 // This function is safe for concurrent access.
 func (m *memWallet) UnlockOutputs(inputs []*wire.TxIn) {
-	tracef(m.t, "memwallet.UnlockOutputs")
-	defer tracef(m.t, "memwallet.UnlockOutputs exit")
+	log.Tracef("memwallet.UnlockOutputs")
+	defer log.Tracef("memwallet.UnlockOutputs exit")
 
 	m.Lock()
 	defer m.Unlock()
@@ -577,8 +573,8 @@ func (m *memWallet) UnlockOutputs(inputs []*wire.TxIn) {
 //
 // This function is safe for concurrent access.
 func (m *memWallet) ConfirmedBalance() dcrutil.Amount {
-	tracef(m.t, "memwallet.ConfirmedBalance")
-	defer tracef(m.t, "memwallet.ConfirmedBalance exit")
+	log.Tracef("memwallet.ConfirmedBalance")
+	defer log.Tracef("memwallet.ConfirmedBalance exit")
 
 	m.RLock()
 	defer m.RUnlock()

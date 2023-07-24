@@ -64,8 +64,6 @@ type Harness struct {
 	maxConnRetries int
 	nodeNum        int
 
-	t *testing.T
-
 	sync.Mutex
 }
 
@@ -98,6 +96,10 @@ func SetPathToDCRD(fnScopePathToDCRD string) {
 // NOTE: This function is safe for concurrent access, but care must be taken
 // when calling New with different dcrd executables, as whatever is at
 // pathToDCRD at the time will be used to launch that node.
+//
+// NOTE: passing a *testing.T object is deprecated and will be removed in a
+// future major version of this package. Use the global UseLogger function with
+// an appropriate backend to log events from this package.
 func New(t *testing.T, activeNet *chaincfg.Params, handlers *rpcclient.NotificationHandlers, extraArgs []string) (*Harness, error) {
 	harnessStateMtx.Lock()
 	defer harnessStateMtx.Unlock()
@@ -123,7 +125,7 @@ func New(t *testing.T, activeNet *chaincfg.Params, handlers *rpcclient.Notificat
 	if err != nil {
 		return nil, err
 	}
-	debugf(t, "temp dir: %v\n", nodeTestData)
+	log.Debugf("temp dir: %v\n", nodeTestData)
 
 	certFile := filepath.Join(nodeTestData, "rpc.cert")
 	keyFile := filepath.Join(nodeTestData, "rpc.key")
@@ -131,7 +133,7 @@ func New(t *testing.T, activeNet *chaincfg.Params, handlers *rpcclient.Notificat
 		return nil, err
 	}
 
-	wallet, err := newMemWallet(t, activeNet, uint32(numTestInstances))
+	wallet, err := newMemWallet(activeNet, uint32(numTestInstances))
 	if err != nil {
 		return nil, err
 	}
@@ -161,7 +163,7 @@ func New(t *testing.T, activeNet *chaincfg.Params, handlers *rpcclient.Notificat
 	// config.debugLevel = "TXMP=trace,TRSY=trace,RPCS=trace,PEER=trace"
 
 	// Create the testing node bounded to the simnet.
-	node, err := newNode(t, config, nodeTestData)
+	node, err := newNode(config, nodeTestData)
 	if err != nil {
 		return nil, err
 	}
@@ -204,7 +206,6 @@ func New(t *testing.T, activeNet *chaincfg.Params, handlers *rpcclient.Notificat
 		ActiveNet:      activeNet,
 		nodeNum:        nodeNum,
 		wallet:         wallet,
-		t:              t,
 	}
 
 	return h, nil
@@ -241,7 +242,7 @@ func (h *Harness) SetUp(ctx context.Context, createTestChain bool, numMatureOutp
 		return err
 	}
 
-	tracef(h.t, "createTestChain %v numMatureOutputs %v", createTestChain,
+	log.Tracef("createTestChain %v numMatureOutputs %v", createTestChain,
 		numMatureOutputs)
 	// Create a test chain with the desired number of mature coinbase
 	// outputs.
@@ -249,7 +250,7 @@ func (h *Harness) SetUp(ctx context.Context, createTestChain bool, numMatureOutp
 		// Include an extra block to account for the premine block.
 		numToGenerate := (uint32(h.ActiveNet.CoinbaseMaturity) +
 			numMatureOutputs) + 1
-		tracef(h.t, "Generate: %v", numToGenerate)
+		log.Tracef("Generate: %v", numToGenerate)
 		_, err := h.Node.Generate(ctx, numToGenerate)
 		if err != nil {
 			return err
@@ -262,7 +263,7 @@ func (h *Harness) SetUp(ctx context.Context, createTestChain bool, numMatureOutp
 	if err != nil {
 		return err
 	}
-	tracef(h.t, "Best block height: %v", height)
+	log.Tracef("Best block height: %v", height)
 	ticker := time.NewTicker(time.Millisecond * 100)
 	for range ticker.C {
 		walletHeight := h.wallet.SyncedHeight()
@@ -270,7 +271,7 @@ func (h *Harness) SetUp(ctx context.Context, createTestChain bool, numMatureOutp
 			break
 		}
 	}
-	tracef(h.t, "Synced: %v", height)
+	log.Tracef("Synced: %v", height)
 
 	return nil
 }
@@ -281,23 +282,17 @@ func (h *Harness) SetUp(ctx context.Context, createTestChain bool, numMatureOutp
 // NOTE: This method and SetUp should always be called from the same goroutine
 // as they are not concurrent safe.
 func (h *Harness) TearDown() error {
-	tracef(h.t, "TearDown %p %p", h.Node, h.node)
-	defer tracef(h.t, "TearDown done")
+	log.Tracef("TearDown %p %p", h.Node, h.node)
+	defer log.Tracef("TearDown done")
 
 	if h.Node != nil {
-		tracef(h.t, "TearDown: Node")
+		log.Tracef("TearDown: Node")
 		h.Node.Shutdown()
 	}
 
-	tracef(h.t, "TearDown: node")
+	log.Tracef("TearDown: node")
 	if err := h.node.shutdown(); err != nil {
 		return err
-	}
-
-	if !(debug || trace) {
-		if err := os.RemoveAll(h.testNodeDir); err != nil {
-			return err
-		}
 	}
 
 	return nil
