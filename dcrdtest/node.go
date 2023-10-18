@@ -24,6 +24,9 @@ import (
 	rpc "github.com/decred/dcrd/rpcclient/v8"
 )
 
+// errDcrdCmdExec is the error returned when the dcrd binary is not executed.
+var errDcrdCmdExec = errors.New("unable to exec dcrd binary")
+
 // nodeConfig contains all the args, and data required to launch a dcrd process
 // and connect the rpc client to it.
 type nodeConfig struct {
@@ -201,7 +204,6 @@ func newNode(config *nodeConfig, dataDir string) (*node, error) {
 	return &node{
 		config:  config,
 		dataDir: dataDir,
-		cmd:     config.command(),
 	}, nil
 }
 
@@ -216,8 +218,10 @@ func (n *node) start(ctx context.Context) error {
 	var pid sync.WaitGroup
 	pid.Add(1)
 
+	cmd := n.config.command()
+
 	// Redirect stderr.
-	n.stderr, err = n.cmd.StderrPipe()
+	n.stderr, err = cmd.StderrPipe()
 	if err != nil {
 		return err
 	}
@@ -229,7 +233,10 @@ func (n *node) start(ctx context.Context) error {
 		for {
 			line, err := r.ReadBytes('\n')
 			if errors.Is(err, io.EOF) {
-				log.Tracef("stderr: EOF")
+				n.logf("stderr: EOF")
+				return
+			} else if err != nil {
+				n.logf("stderr: Unable to read stderr: %v", err)
 				return
 			}
 			n.logf("stderr: %s", line)
@@ -237,7 +244,7 @@ func (n *node) start(ctx context.Context) error {
 	}()
 
 	// Redirect stdout.
-	n.stdout, err = n.cmd.StdoutPipe()
+	n.stdout, err = cmd.StdoutPipe()
 	if err != nil {
 		return err
 	}
@@ -249,7 +256,10 @@ func (n *node) start(ctx context.Context) error {
 		for {
 			line, err := r.ReadBytes('\n')
 			if errors.Is(err, io.EOF) {
-				log.Tracef("stdout: EOF")
+				n.logf("stdout: EOF")
+				return
+			} else if err != nil {
+				n.logf("stdout: Unable to read stdout: %v", err)
 				return
 			}
 			log.Tracef("stdout: %s", line)
@@ -269,8 +279,10 @@ func (n *node) start(ctx context.Context) error {
 			switch msg := msg.(type) {
 			case boundP2PListenAddrEvent:
 				p2pAddr = string(msg)
+				n.logf("P2P listen addr: %s", p2pAddr)
 			case boundRPCListenAddrEvent:
 				rpcAddr = string(msg)
+				n.logf("RPC listen addr: %s", rpcAddr)
 			}
 			if p2pAddr != "" && rpcAddr != "" {
 				close(gotSubsysAddrs)
@@ -283,33 +295,45 @@ func (n *node) start(ctx context.Context) error {
 		for err == nil {
 			_, err = nextIPCMessage(n.config.pipeRX.r)
 		}
+		n.logf("IPC messages drained")
 	}()
 
 	// Launch command and store pid.
-	if err := n.cmd.Start(); err != nil {
-		return err
+	if err := cmd.Start(); err != nil {
+		// When failing to execute, wait until running goroutines are
+		// closed.
+		pid.Done()
+		n.wg.Wait()
+		n.config.pipeTX.close()
+		n.config.pipeRX.close()
+		return fmt.Errorf("%w: %v", errDcrdCmdExec, err)
 	}
+	n.cmd = cmd
 	n.pid = n.cmd.Process.Pid
 
-	// Unblock pipes now pid is available
+	// Unblock pipes now that pid is available.
 	pid.Done()
 
 	f, err := os.Create(filepath.Join(n.config.String(), "dcrd.pid"))
 	if err != nil {
+		_ = n.stop() // Cleanup what has been done so far.
 		return err
 	}
 
 	n.pidFile = f.Name()
 	if _, err = fmt.Fprintf(f, "%d\n", n.cmd.Process.Pid); err != nil {
+		_ = n.stop() // Cleanup what has been done so far.
 		return err
 	}
 	if err := f.Close(); err != nil {
+		_ = n.stop() // Cleanup what has been done so far.
 		return err
 	}
 
 	// Read the RPC and P2P addresses.
 	select {
 	case <-ctx.Done():
+		_ = n.stop() // Cleanup what has been done so far.
 		return ctx.Err()
 	case <-gotSubsysAddrs:
 		n.p2pAddr = p2pAddr
@@ -323,7 +347,7 @@ func (n *node) start(ctx context.Context) error {
 // properly. On windows, interrupt is not supported, so a kill signal is used
 // instead
 func (n *node) stop() error {
-	log.Tracef("stop %p %p", n.cmd, n.cmd.Process)
+	log.Tracef("stop %p", n.cmd)
 	defer log.Tracef("stop done")
 
 	if n.cmd == nil || n.cmd.Process == nil {
@@ -366,6 +390,9 @@ func (n *node) stop() error {
 	if err := n.config.pipeTX.close(); err != nil {
 		n.logf("Unable to close pipe TX: %v", err)
 	}
+
+	// Mark command terminated.
+	n.cmd = nil
 	return nil
 }
 

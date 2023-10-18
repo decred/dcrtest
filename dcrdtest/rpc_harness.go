@@ -7,6 +7,7 @@ package dcrdtest
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -38,6 +39,8 @@ var (
 	// throughout the life of this package.
 	pathToDCRD    string
 	pathToDCRDMtx sync.RWMutex
+
+	errNilCoinbaseAddr = errors.New("memWallet coinbase addr is nil")
 )
 
 // Harness fully encapsulates an active dcrd process to provide a unified
@@ -218,7 +221,14 @@ func New(t *testing.T, activeNet *chaincfg.Params, handlers *rpcclient.Notificat
 //
 // NOTE: This method and TearDown should always be called from the same
 // goroutine as they are not concurrent safe.
-func (h *Harness) SetUp(ctx context.Context, createTestChain bool, numMatureOutputs uint32) error {
+func (h *Harness) SetUp(ctx context.Context, createTestChain bool, numMatureOutputs uint32) (err error) {
+	defer func() {
+		if err != nil {
+			tearErr := h.TearDown()
+			log.Warnf("Teardown error after setup error %v: %v", err, tearErr)
+		}
+	}()
+
 	// Start the dcrd node itself. This spawns a new process which will be
 	// managed
 	if err := h.node.start(ctx); err != nil {
@@ -231,6 +241,9 @@ func (h *Harness) SetUp(ctx context.Context, createTestChain bool, numMatureOutp
 
 	// Filter transactions that pay to the coinbase associated with the
 	// wallet.
+	if h.wallet.coinbaseAddr == nil {
+		return errNilCoinbaseAddr
+	}
 	filterAddrs := []stdaddr.Address{h.wallet.coinbaseAddr}
 	if err := h.Node.LoadTxFilter(ctx, true, filterAddrs, nil); err != nil {
 		return err
@@ -282,17 +295,28 @@ func (h *Harness) SetUp(ctx context.Context, createTestChain bool, numMatureOutp
 // NOTE: This method and SetUp should always be called from the same goroutine
 // as they are not concurrent safe.
 func (h *Harness) TearDown() error {
-	log.Tracef("TearDown %p %p", h.Node, h.node)
-	defer log.Tracef("TearDown done")
+	log.Debugf("TearDown %p %p", h.Node, h.node)
+	defer log.Debugf("TearDown done")
 
 	if h.Node != nil {
-		log.Tracef("TearDown: Node")
+		log.Debugf("TearDown: Node")
 		h.Node.Shutdown()
+		h.Node = nil
 	}
 
-	log.Tracef("TearDown: node")
-	if err := h.node.shutdown(); err != nil {
-		return err
+	if h.node != nil {
+		log.Debugf("TearDown: node")
+		node := h.node
+		h.node = nil
+		if err := node.shutdown(); err != nil {
+			return err
+		}
+	}
+
+	log.Debugf("TearDown: wallet")
+	if h.wallet != nil {
+		h.wallet.Stop()
+		h.wallet = nil
 	}
 
 	return nil

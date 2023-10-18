@@ -1,0 +1,2 @@
+github.com/decred/dcrd/blockchain/v5 v5.0.0/go.mod h1:Khd1xIrEmstkaclyfvf72ecn9KIv4CjEawqBH+icTbA=
+golang.org/x/term v0.5.0/go.mod h1:jMB1sMXY+tzblOD4FWmEbocvup2/aLOaQEp7JmGp78k=

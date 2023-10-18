@@ -21,6 +21,8 @@ require (
 	github.com/decred/dcrd/rpcclient/v8 v8.0.0
 	github.com/decred/dcrd/txscript/v4 v4.1.0
 	github.com/decred/dcrd/wire v1.6.0
+	github.com/decred/slog v1.2.0
+	matheusd.com/testctx v0.1.0
 )
 
 require (
@@ -42,7 +44,6 @@ require (
 	github.com/decred/dcrd/math/uint256 v1.0.1 // indirect
 	github.com/decred/dcrd/peer/v3 v3.0.2 // indirect
 	github.com/decred/go-socks v1.1.0 // indirect
-	github.com/decred/slog v1.2.0 // indirect
 	github.com/golang/snappy v0.0.4 // indirect
 	github.com/gorilla/websocket v1.5.0 // indirect
 	github.com/jessevdk/go-flags v1.5.0 // indirect
