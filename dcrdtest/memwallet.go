@@ -114,6 +114,12 @@ type memWallet struct {
 
 	net *chaincfg.Params
 
+	// quit is closed when the harness node is stopped.
+	quit chan struct{}
+
+	// wg tracks the mem wallet's goroutines.
+	wg sync.WaitGroup
+
 	rpc *rpcclient.Client
 
 	sync.RWMutex
@@ -164,12 +170,21 @@ func newMemWallet(net *chaincfg.Params, harnessID uint32) (*memWallet, error) {
 		utxos:             make(map[wire.OutPoint]*utxo),
 		chainUpdateSignal: make(chan struct{}),
 		reorgJournal:      make(map[int64]*undoEntry),
+		quit:              make(chan struct{}),
+		wg:                sync.WaitGroup{},
 	}, nil
 }
 
 // Start launches all goroutines required for the wallet to function properly.
 func (m *memWallet) Start() {
+	m.wg.Add(1)
 	go m.chainSyncer()
+}
+
+// Stop stops all goroutines required for the wallet to function properly.
+func (m *memWallet) Stop() {
+	close(m.quit)
+	m.wg.Wait()
 }
 
 // SyncedHeight returns the height the wallet is known to be synced to.
@@ -219,7 +234,10 @@ func (m *memWallet) IngestBlock(header []byte, filteredTxns [][]byte) {
 	// available. We do this in a new goroutine in order to avoid blocking
 	// the main loop of the rpc client.
 	go func() {
-		m.chainUpdateSignal <- struct{}{}
+		select {
+		case m.chainUpdateSignal <- struct{}{}:
+		case <-m.quit:
+		}
 	}()
 }
 
@@ -230,10 +248,17 @@ func (m *memWallet) IngestBlock(header []byte, filteredTxns [][]byte) {
 func (m *memWallet) chainSyncer() {
 	log.Tracef("memwallet.chainSyncer")
 	defer log.Tracef("memwallet.chainSyncer exit")
+	defer m.wg.Done()
 
 	var update *chainUpdate
 
-	for range m.chainUpdateSignal {
+	for {
+		select {
+		case <-m.chainUpdateSignal:
+		case <-m.quit:
+			return
+		}
+
 		// A new update is available, so pop the new chain update from
 		// the front of the update queue.
 		m.chainMtx.Lock()

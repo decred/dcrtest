@@ -6,8 +6,12 @@
 package dcrdtest
 
 import (
+	"bytes"
 	"context"
+	"errors"
 	"fmt"
+	"os"
+	"runtime/pprof"
 	"testing"
 	"time"
 
@@ -16,10 +20,8 @@ import (
 	"github.com/decred/dcrd/dcrutil/v4"
 	dcrdtypes "github.com/decred/dcrd/rpc/jsonrpc/types/v4"
 	"github.com/decred/dcrd/wire"
-)
-
-const (
-	numMatureOutputs = 25
+	"github.com/decred/slog"
+	"matheusd.com/testctx"
 )
 
 func testSendOutputs(ctx context.Context, r *Harness, t *testing.T) {
@@ -565,6 +567,8 @@ func testMemWalletLockedOutputs(ctx context.Context, r *Harness, t *testing.T) {
 }
 
 func TestHarness(t *testing.T) {
+	const numMatureOutputs = 25
+
 	var err error
 	mainHarness, err := New(t, chaincfg.RegNetParams(), nil, nil)
 	if err != nil {
@@ -575,12 +579,6 @@ func TestHarness(t *testing.T) {
 	// 25 mature coinbases to allow spending from for testing purposes.
 	ctx := context.Background()
 	if err = mainHarness.SetUp(ctx, true, numMatureOutputs); err != nil {
-		// Even though the harness was not fully setup, it still needs
-		// to be torn down to ensure all resources such as temp
-		// directories are cleaned up.  The error is intentionally
-		// ignored since this is already an error path and nothing else
-		// could be done about it anyways.
-		_ = mainHarness.TearDown()
 		t.Fatalf("unable to setup test chain: %v", err)
 	}
 
@@ -656,5 +654,143 @@ func TestHarness(t *testing.T) {
 		if !ok {
 			return
 		}
+	}
+}
+
+// loggerWriter is an slog backend that writes to a test output.
+type loggerWriter struct {
+	l testing.TB
+}
+
+func (lw loggerWriter) Write(b []byte) (int, error) {
+	bt := bytes.TrimRight(b, "\r\n")
+	lw.l.Logf(string(bt))
+	return len(b), nil
+}
+
+// TestSetupTeardown tests that setting up and tearing down an rpc harness does
+// not leak any goroutines.
+func TestSetupTeardown(t *testing.T) {
+	// Add logging to ease debugging this test.
+	lw := loggerWriter{l: t}
+	bknd := slog.NewBackend(lw)
+	UseLogger(bknd.Logger("TEST"))
+	log.SetLevel(slog.LevelDebug)
+	defer UseLogger(slog.Disabled)
+
+	params := chaincfg.RegNetParams()
+	mainHarness, err := New(t, params, nil, nil)
+	if err != nil {
+		t.Fatalf("unable to create main harness: %v", err)
+	}
+
+	// Perform the setup.
+	ctx := testctx.WithTimeout(t, time.Second*30)
+	if err = mainHarness.SetUp(ctx, true, 2); err != nil {
+		t.Fatalf("unable to setup test chain: %v", err)
+	}
+
+	// Perform the teardown.
+	if err := mainHarness.TearDown(); err != nil {
+		t.Fatalf("unable to TearDown test chain: %v", err)
+	}
+
+	// There should be only 2 goroutines live.
+	prof := pprof.Lookup("goroutine")
+	gotCount, wantCount := prof.Count(), 2
+	if gotCount != wantCount {
+		prof.WriteTo(os.Stderr, 1)
+		t.Fatalf("Unexpected nb of active goroutines: got %d, want %d",
+			gotCount, wantCount)
+	}
+}
+
+// TestSetupWithError tests that when the setup of an rpc harness fails, it
+// cleanly tears down the harness without user intervention.
+func TestSetupWithError(t *testing.T) {
+	// Keep track of how many goroutines are running before the test
+	// happens.
+	beforeCount := pprof.Lookup("goroutine").Count()
+
+	// Add logging to ease debugging this test.
+	lw := loggerWriter{l: t}
+	bknd := slog.NewBackend(lw)
+	UseLogger(bknd.Logger("TEST"))
+	log.SetLevel(slog.LevelDebug)
+	defer UseLogger(slog.Disabled)
+
+	params := chaincfg.RegNetParams()
+	mainHarness, err := New(t, params, nil, nil)
+	if err != nil {
+		t.Fatalf("unable to create main harness: %v", err)
+	}
+
+	// Reach into the wallet and set a nil coinbaseAddr. This will cause
+	// SetUp() to fail with a well known error.
+	mainHarness.wallet.coinbaseAddr = nil
+
+	// Perform the setup. This should fail.
+	ctx := testctx.WithTimeout(t, time.Second*30)
+	if err := mainHarness.SetUp(ctx, true, 2); !errors.Is(err, errNilCoinbaseAddr) {
+		t.Fatalf("Unexpected error in Setup(): got %v, want %v", err, errNilCoinbaseAddr)
+	}
+
+	// There should not be any new goroutines running.
+	prof := pprof.Lookup("goroutine")
+	afterCount := prof.Count()
+	if afterCount != beforeCount {
+		prof.WriteTo(os.Stderr, 1)
+		t.Fatalf("Unexpected nb of active goroutines: got %d, want %d",
+			afterCount, beforeCount)
+	}
+
+	// Calling TearDown should not panic or error.
+	if err := mainHarness.TearDown(); err != nil {
+		t.Fatalf("Unexpected error during TearDown: %v", err)
+	}
+}
+
+// TestSetupWithWrongDcrd tests that when the setup of an rpc harness fails due
+// to an inexistent dcrd binary, it cleanly tears down the harness without user
+// intervention.
+func TestSetupWithWrongDcrd(t *testing.T) {
+	// Keep track of how many goroutines are running before the test
+	// happens.
+	beforeCount := pprof.Lookup("goroutine").Count()
+
+	// Add logging to ease debugging this test.
+	lw := loggerWriter{l: t}
+	bknd := slog.NewBackend(lw)
+	UseLogger(bknd.Logger("TEST"))
+	log.SetLevel(slog.LevelDebug)
+	defer UseLogger(slog.Disabled)
+
+	SetPathToDCRD("/path/to/dcrd/that/does/not/exist")
+	defer SetPathToDCRD("")
+
+	params := chaincfg.RegNetParams()
+	mainHarness, err := New(t, params, nil, nil)
+	if err != nil {
+		t.Fatalf("unable to create main harness: %v", err)
+	}
+
+	// Perform the setup. This should fail.
+	ctx := testctx.WithTimeout(t, time.Second*30)
+	if err := mainHarness.SetUp(ctx, true, 2); !errors.Is(err, errDcrdCmdExec) {
+		t.Fatalf("Unexpected error in Setup(): got %v, want %v", err, errDcrdCmdExec)
+	}
+
+	// There should not be any new goroutines running.
+	prof := pprof.Lookup("goroutine")
+	afterCount := prof.Count()
+	if afterCount != beforeCount {
+		prof.WriteTo(os.Stderr, 1)
+		t.Fatalf("Unexpected nb of active goroutines: got %d, want %d",
+			afterCount, beforeCount)
+	}
+
+	// Calling TearDown should not panic or error.
+	if err := mainHarness.TearDown(); err != nil {
+		t.Fatalf("Unexpected error during TearDown: %v", err)
 	}
 }
