@@ -67,6 +67,8 @@ type Harness struct {
 	maxConnRetries int
 	nodeNum        int
 
+	keepNodeDir bool
+
 	sync.Mutex
 }
 
@@ -214,6 +216,15 @@ func New(t *testing.T, activeNet *chaincfg.Params, handlers *rpcclient.Notificat
 	return h, nil
 }
 
+// SetKeepNodeDir sets the flag  in the Harness on whether to keep or remove
+// its node dir after TearDown is called.
+//
+// This is NOT safe for concurrent access and MUST be called from the same
+// goroutine that calls SetUp and TearDown.
+func (h *Harness) SetKeepNodeDir(keep bool) {
+	h.keepNodeDir = keep
+}
+
 // SetUp initializes the rpc test state. Initialization includes: starting up a
 // simnet node, creating a websockets client and connecting to the started
 // node, and finally: optionally generating and submitting a testchain with a
@@ -319,13 +330,28 @@ func (h *Harness) TearDown() error {
 		h.wallet = nil
 	}
 
+	if !h.keepNodeDir {
+		if err := os.RemoveAll(h.testNodeDir); err != nil {
+			log.Warnf("Unable to remove test node dir %s: %v", h.testNodeDir, err)
+		} else {
+			log.Debugf("Removed test node dir %s", h.testNodeDir)
+		}
+	}
+
 	return nil
 }
 
 // TearDownInTest performs the TearDown during a test, logging the error to the
 // test object. If the test has not yet failed and the TearDown itself fails,
 // then this fails the test.
+//
+// If the test has already failed, then the dir for node data is kept for manual
+// debugging.
 func (h *Harness) TearDownInTest(t testing.TB) {
+	if t.Failed() {
+		h.SetKeepNodeDir(true)
+	}
+
 	err := h.TearDown()
 	if err != nil {
 		errMsg := fmt.Sprintf("Unable to teardown dcrdtest harness: %v", err)
