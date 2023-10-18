@@ -703,6 +703,12 @@ func TestSetupTeardown(t *testing.T) {
 		t.Fatalf("Unexpected nb of active goroutines: got %d, want %d",
 			gotCount, wantCount)
 	}
+
+	// Node dir should've been removed.
+	if _, err := os.Stat(mainHarness.testNodeDir); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("Unexpected Stat(testNodeDir) error: got %v, want %v",
+			err, os.ErrNotExist)
+	}
 }
 
 // TestSetupWithError tests that when the setup of an rpc harness fails, it
@@ -792,5 +798,39 @@ func TestSetupWithWrongDcrd(t *testing.T) {
 	// Calling TearDown should not panic or error.
 	if err := mainHarness.TearDown(); err != nil {
 		t.Fatalf("Unexpected error during TearDown: %v", err)
+	}
+}
+
+// TestKeepNodeDir asserts that when the harness is set to keep the node dir,
+// it is not removed after TearDown().
+func TestKeepNodeDir(t *testing.T) {
+	// Add logging to ease debugging this test.
+	lw := loggerWriter{l: t}
+	bknd := slog.NewBackend(lw)
+	UseLogger(bknd.Logger("TEST"))
+	log.SetLevel(slog.LevelDebug)
+	defer UseLogger(slog.Disabled)
+
+	params := chaincfg.RegNetParams()
+	mainHarness, err := New(t, params, nil, nil)
+	if err != nil {
+		t.Fatalf("unable to create main harness: %v", err)
+	}
+
+	// Perform the setup. This should succeed.
+	ctx := testctx.WithTimeout(t, time.Second*30)
+	if err := mainHarness.SetUp(ctx, true, 2); err != nil {
+		t.Fatalf("Unexpected error in Setup(): got %v, want %v", err, nil)
+	}
+
+	// Set to keep the node dir.
+	mainHarness.SetKeepNodeDir(true)
+
+	// Perform the TearDown. This should not error and the node dir should
+	// be kept.
+	mainHarness.TearDownInTest(t)
+	if _, err := os.Stat(mainHarness.testNodeDir); err != nil {
+		t.Fatalf("Unexpected Stat(testNodeDir) error: got %v, want %v",
+			err, nil)
 	}
 }
