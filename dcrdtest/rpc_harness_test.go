@@ -833,4 +833,9 @@ func TestKeepNodeDir(t *testing.T) {
 		t.Fatalf("Unexpected Stat(testNodeDir) error: got %v, want %v",
 			err, nil)
 	}
+
+	// Manually remove the dir to clean up after this test.
+	if err := os.RemoveAll(mainHarness.testNodeDir); err != nil {
+		t.Fatalf("Unable to cleanup testNodeDir: %v", err)
+	}
 }
