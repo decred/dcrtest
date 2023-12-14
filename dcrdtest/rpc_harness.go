@@ -11,8 +11,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strconv"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -25,14 +25,8 @@ import (
 )
 
 var (
-	// XXX these variables are accessed in what should be accessor
-	// functions yet it is all global
-
 	// current number of active test nodes.
-	numTestInstances = 0
-
-	// Used to protest concurrent access to above declared variables.
-	harnessStateMtx sync.RWMutex
+	numTestInstances atomic.Uint32
 
 	// pathToDCRD points to the test node. It is supplied through
 	// NewWithDCRD or created on the first call to newNode and used
@@ -65,7 +59,6 @@ type Harness struct {
 
 	testNodeDir    string
 	maxConnRetries int
-	nodeNum        int
 
 	keepNodeDir bool
 
@@ -106,9 +99,6 @@ func SetPathToDCRD(fnScopePathToDCRD string) {
 // future major version of this package. Use the global UseLogger function with
 // an appropriate backend to log events from this package.
 func New(t *testing.T, activeNet *chaincfg.Params, handlers *rpcclient.NotificationHandlers, extraArgs []string) (*Harness, error) {
-	harnessStateMtx.Lock()
-	defer harnessStateMtx.Unlock()
-
 	// Add a flag for the appropriate network type based on the provided
 	// chain params.
 	switch activeNet.Net {
@@ -125,8 +115,8 @@ func New(t *testing.T, activeNet *chaincfg.Params, handlers *rpcclient.Notificat
 			"of the supported chain networks")
 	}
 
-	harnessID := strconv.Itoa(numTestInstances)
-	nodeTestData, err := os.MkdirTemp("", "dcrdtest-"+harnessID)
+	nodeNum := numTestInstances.Add(1)
+	nodeTestData, err := os.MkdirTemp("", fmt.Sprintf("dcrdtest-%03d-*", nodeNum))
 	if err != nil {
 		return nil, err
 	}
@@ -138,7 +128,7 @@ func New(t *testing.T, activeNet *chaincfg.Params, handlers *rpcclient.Notificat
 		return nil, err
 	}
 
-	wallet, err := newMemWallet(activeNet, uint32(numTestInstances))
+	wallet, err := newMemWallet(activeNet, nodeNum)
 	if err != nil {
 		return nil, err
 	}
@@ -172,8 +162,6 @@ func New(t *testing.T, activeNet *chaincfg.Params, handlers *rpcclient.Notificat
 	if err != nil {
 		return nil, err
 	}
-	nodeNum := numTestInstances
-	numTestInstances++
 
 	if handlers == nil {
 		handlers = &rpcclient.NotificationHandlers{}
@@ -209,7 +197,6 @@ func New(t *testing.T, activeNet *chaincfg.Params, handlers *rpcclient.Notificat
 		maxConnRetries: 20,
 		testNodeDir:    nodeTestData,
 		ActiveNet:      activeNet,
-		nodeNum:        nodeNum,
 		wallet:         wallet,
 	}
 
