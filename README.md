@@ -12,6 +12,9 @@ The following sub-modules are currently provided:
 
   - [`dcrdtest`](./dcrdtest): Provides testing facilities to use
     [`dcrd`](https://github.com/decred/dcrd) binaries in a simnet network.
+  - [`dcrwtest`](./dcrwtest): Provides automation facilities to use
+    [`dcrwallet`](https://github.com/decred/dcrwallet) binaries in testing or
+    other autmated scenarios.
 
 ## License
 
