@@ -330,11 +330,19 @@ func (n *node) start(ctx context.Context) error {
 		return err
 	}
 
+	earlyShutdown := make(chan error, 1)
+	go func() {
+		earlyShutdown <- cmd.Wait()
+	}()
+
 	// Read the RPC and P2P addresses.
 	select {
 	case <-ctx.Done():
 		_ = n.stop() // Cleanup what has been done so far.
 		return ctx.Err()
+	case err := <-earlyShutdown:
+		_ = n.stop()
+		return err
 	case <-gotSubsysAddrs:
 		n.p2pAddr = p2pAddr
 		n.rpcAddr = rpcAddr
