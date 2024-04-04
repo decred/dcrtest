@@ -177,12 +177,15 @@ func (n *nodeConfig) String() string {
 type node struct {
 	config *nodeConfig
 
-	cmd     *exec.Cmd
-	pidFile string
-	stderr  io.ReadCloser
-	stdout  io.ReadCloser
-	wg      sync.WaitGroup
-	pid     int
+	cmd        *exec.Cmd
+	cmdStarted chan struct{} // Closed after cmd is started and assigned
+	cmdDone    chan error    // Sent error and closed after cmdErr is assigned
+	cmdErr     error         // Must only be read after receiving on cmdDone
+	pidFile    string
+	stderr     io.ReadCloser
+	stdout     io.ReadCloser
+	wg         sync.WaitGroup
+	pid        int
 
 	// Locally bound addresses for the subsystems.
 	p2pAddr string
@@ -202,8 +205,10 @@ func (n *node) logf(format string, args ...interface{}) {
 // as the base for the log and data directories for dcrd.
 func newNode(config *nodeConfig, dataDir string) (*node, error) {
 	return &node{
-		config:  config,
-		dataDir: dataDir,
+		config:     config,
+		dataDir:    dataDir,
+		cmdStarted: make(chan struct{}),
+		cmdDone:    make(chan error, 1),
 	}, nil
 }
 
@@ -309,6 +314,7 @@ func (n *node) start(ctx context.Context) error {
 		return fmt.Errorf("%w: %v", errDcrdCmdExec, err)
 	}
 	n.cmd = cmd
+	close(n.cmdStarted)
 	n.pid = n.cmd.Process.Pid
 
 	// Unblock pipes now that pid is available.
@@ -330,9 +336,13 @@ func (n *node) start(ctx context.Context) error {
 		return err
 	}
 
-	earlyShutdown := make(chan error, 1)
+	n.wg.Add(1)
 	go func() {
-		earlyShutdown <- cmd.Wait()
+		defer n.wg.Done()
+
+		n.cmdErr = n.cmd.Wait()
+		n.cmdDone <- n.cmdErr
+		close(n.cmdDone)
 	}()
 
 	// Read the RPC and P2P addresses.
@@ -340,7 +350,7 @@ func (n *node) start(ctx context.Context) error {
 	case <-ctx.Done():
 		_ = n.stop() // Cleanup what has been done so far.
 		return ctx.Err()
-	case err := <-earlyShutdown:
+	case err := <-n.cmdDone:
 		_ = n.stop()
 		return err
 	case <-gotSubsysAddrs:
@@ -358,10 +368,18 @@ func (n *node) stop() error {
 	log.Tracef("stop %p", n.cmd)
 	defer log.Tracef("stop done")
 
-	if n.cmd == nil || n.cmd.Process == nil {
-		// return if not properly initialized
-		// or error starting the process
+	select {
+	case <-n.cmdStarted:
+	default:
+		// has not been started (yet, or ever)
 		return nil
+	}
+
+	select {
+	case <-n.cmdDone:
+		// already stopped
+		return nil
+	default:
 	}
 
 	// Attempt a graceful dcrd shutdown by closing the pipeRX files.
@@ -389,8 +407,8 @@ func (n *node) stop() error {
 
 	// Wait for command to exit.
 	log.Tracef("stop cmd.Wait")
-	err = n.cmd.Wait()
-	if err != nil {
+	<-n.cmdDone
+	if err := n.cmdErr; err != nil {
 		log.Debugf("stop cmd.Wait error: %v", err)
 	}
 
@@ -399,8 +417,6 @@ func (n *node) stop() error {
 		n.logf("Unable to close pipe TX: %v", err)
 	}
 
-	// Mark command terminated.
-	n.cmd = nil
 	return nil
 }
 
