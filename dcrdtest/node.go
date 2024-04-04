@@ -133,6 +133,10 @@ func (n *nodeConfig) arguments() []string {
 	args = append(args, fmt.Sprintf("--rpckey=%s", n.keyFile))
 	// --txindex
 	args = append(args, "--txindex")
+	if n.prefix != "" {
+		// --appdata
+		args = append(args, fmt.Sprintf("--appdata=%s", n.prefix))
+	}
 	if n.dataDir != "" {
 		// --datadir
 		args = append(args, fmt.Sprintf("--datadir=%s", n.dataDir))
