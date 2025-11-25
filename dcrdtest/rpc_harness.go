@@ -343,9 +343,9 @@ func (h *Harness) TearDownInTest(t testing.TB) {
 	if err != nil {
 		errMsg := fmt.Sprintf("Unable to teardown dcrdtest harness: %v", err)
 		if !t.Failed() {
-			t.Fatalf(errMsg)
+			t.Fatal(errMsg)
 		} else {
-			t.Logf(errMsg)
+			t.Log(errMsg)
 		}
 	}
 }
