@@ -550,7 +550,7 @@ func testMemWalletLockedOutputs(ctx context.Context, r *Harness, t *testing.T) {
 	// The current wallet balance should now be at least 50 Coin less
 	// (accounting for fees) than the period balance
 	currentBalance := r.ConfirmedBalance()
-	if !(currentBalance <= startingBalance-outputAmt) {
+	if currentBalance > startingBalance-outputAmt {
 		t.Fatalf("spent outputs not locked: previous balance %v, "+
 			"current balance %v", startingBalance, currentBalance)
 	}
@@ -664,7 +664,7 @@ type loggerWriter struct {
 
 func (lw loggerWriter) Write(b []byte) (int, error) {
 	bt := bytes.TrimRight(b, "\r\n")
-	lw.l.Logf(string(bt))
+	lw.l.Log(string(bt))
 	return len(b), nil
 }
 
